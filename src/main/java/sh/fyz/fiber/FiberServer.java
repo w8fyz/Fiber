@@ -1,15 +1,24 @@
 package sh.fyz.fiber;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import sh.fyz.fiber.annotations.AuthenticatedUser;
+import sh.fyz.fiber.annotations.Controller;
+import sh.fyz.fiber.annotations.RequestMapping;
+import sh.fyz.fiber.annotations.RequireRole;
+import sh.fyz.fiber.core.AuthMiddleware;
 import sh.fyz.fiber.core.EndpointRegistry;
+import sh.fyz.fiber.core.UserAuth;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.handler.EndpointHandler;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
+import sh.fyz.fiber.handler.RouterServlet;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,8 +45,46 @@ public class FiberServer {
         server.setHandler(context);
     }
 
+    /**
+     * Register a controller class
+     * @param controllerClass The controller class to register
+     */
     public void registerController(Class<?> controllerClass) {
         endpointRegistry.registerController(controllerClass);
+        if (documentationEnabled) {
+            documentationController.registerController(controllerClass);
+        }
+    }
+
+    /**
+     * Register a controller instance
+     * @param controller The controller instance to register
+     */
+    public void registerController(Object controller) {
+        Class<?> controllerClass = controller.getClass();
+        Controller annotation = controllerClass.getAnnotation(Controller.class);
+        if (annotation == null) {
+            throw new IllegalArgumentException("Controller class must be annotated with @Controller");
+        }
+
+        String basePath = annotation.value();
+        if (!basePath.startsWith("/")) {
+            basePath = "/" + basePath;
+        }
+
+        // Register all endpoints in the controller
+        for (Method method : controllerClass.getMethods()) {
+            RequestMapping requestMapping = method.getAnnotation(RequestMapping.class);
+            if (requestMapping != null) {
+                String path = requestMapping.value();
+                if (!path.startsWith("/")) {
+                    path = "/" + path;
+                }
+                String fullPath = basePath + path;
+                endpointRegistry.registerEndpoint(fullPath, requestMapping.method(), method, controller);
+            }
+        }
+
         if (documentationEnabled) {
             documentationController.registerController(controllerClass);
         }
@@ -67,47 +114,64 @@ public class FiberServer {
             }
 
             if (apiMethod != null) {
-                ServletHolder apiHolder = new ServletHolder(
-                    new EndpointHandler(documentationController, apiMethod, globalMiddleware)
-                );
-                context.addServlet(apiHolder, "/docs/api");
+                endpointRegistry.registerEndpoint("/docs/api", RequestMapping.Method.GET, apiMethod, documentationController);
             }
 
             if (uiMethod != null) {
-                ServletHolder uiHolder = new ServletHolder(
-                    new EndpointHandler(documentationController, uiMethod, globalMiddleware)
-                );
-                context.addServlet(uiHolder, "/docs/ui");
+                endpointRegistry.registerEndpoint("/docs/ui", RequestMapping.Method.GET, uiMethod, documentationController);
             }
 
             if (cssMethod != null) {
-                ServletHolder cssHolder = new ServletHolder(
-                    new EndpointHandler(documentationController, cssMethod, globalMiddleware)
-                );
-                context.addServlet(cssHolder, "/docs/css/*");
+                endpointRegistry.registerEndpoint("/docs/css/*", RequestMapping.Method.GET, cssMethod, documentationController);
             }
 
             if (jsMethod != null) {
-                ServletHolder jsHolder = new ServletHolder(
-                    new EndpointHandler(documentationController, jsMethod, globalMiddleware)
-                );
-                context.addServlet(jsHolder, "/docs/js/*");
+                endpointRegistry.registerEndpoint("/docs/js/*", RequestMapping.Method.GET, jsMethod, documentationController);
             }
         }
     }
 
     public void start() throws Exception {
-        // Register all endpoints as servlets
-        endpointRegistry.getEndpoints().forEach((path, handler) -> {
-            String endpointPath = path.split(":")[0];
-            ServletHolder holder = new ServletHolder(handler);
-            context.addServlet(holder, endpointPath);
-        });
+        // Create a single servlet to handle all endpoints
+        ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry));
+        context.addServlet(holder, "/*");
         
         server.start();
     }
 
     public void stop() throws Exception {
         server.stop();
+    }
+
+    /**
+     * Process method parameters and inject authenticated user if requested
+     */
+    public static Object[] processParameters(Method method, HttpServletRequest request) {
+        Parameter[] parameters = method.getParameters();
+        Object[] args = new Object[parameters.length];
+
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter param = parameters[i];
+            if (param.isAnnotationPresent(AuthenticatedUser.class)) {
+                if (UserAuth.class.isAssignableFrom(param.getType())) {
+                    // Create a UserAuth instance from the request attributes
+                    String id = AuthMiddleware.getCurrentUserId(request);
+                    String username = AuthMiddleware.getCurrentUsername(request);
+                    String role = AuthMiddleware.getCurrentUserRole(request);
+                    
+                    // Create an anonymous implementation of UserAuth
+                    args[i] = new UserAuth() {
+                        @Override
+                        public String getId() { return id; }
+                        @Override
+                        public String getUsername() { return username; }
+                        @Override
+                        public String getRole() { return role; }
+                    };
+                }
+            }
+        }
+
+        return args;
     }
 } 

@@ -35,6 +35,9 @@ public class ResponseEntity<T> {
     public static <T> ResponseEntity<T> notFound() {
         return new ResponseEntity<>(null, 404);
     }
+    public static <T> ResponseEntity<T> noContent() {
+        return new ResponseEntity<>(null, 204);
+    }
 
     public static <T> ResponseEntity<T> serverError(T body) {
         return new ResponseEntity<>(body, 500);

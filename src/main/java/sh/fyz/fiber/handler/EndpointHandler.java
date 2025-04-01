@@ -5,11 +5,16 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.annotations.AuthenticatedUser;
 import sh.fyz.fiber.annotations.Param;
+import sh.fyz.fiber.annotations.PathVariable;
 import sh.fyz.fiber.annotations.RequestBody;
 import sh.fyz.fiber.annotations.RequestMapping;
+import sh.fyz.fiber.annotations.Controller;
+import sh.fyz.fiber.core.AuthMiddleware;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.ResponseEntity;
+import sh.fyz.fiber.core.UserAuth;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationRegistry;
 import sh.fyz.fiber.validation.ValidationResult;
@@ -18,18 +23,48 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class EndpointHandler extends HttpServlet {
     private final Object controller;
     private final Method method;
     private final List<Middleware> globalMiddleware;
     private final ObjectMapper objectMapper;
+    private final String[] requiredRoles;
+    private final Pattern pathPattern;
+    private String[] pathVariableNames;
 
-    public EndpointHandler(Object controller, Method method, List<Middleware> globalMiddleware) {
+    public EndpointHandler(Object controller, Method method, List<Middleware> globalMiddleware, String[] requiredRoles) {
         this.controller = controller;
         this.method = method;
         this.globalMiddleware = globalMiddleware;
         this.objectMapper = new ObjectMapper();
+        this.requiredRoles = requiredRoles;
+
+        // Extract path variables from the request mapping
+        RequestMapping mapping = method.getAnnotation(RequestMapping.class);
+        Controller controllerAnnotation = method.getDeclaringClass().getAnnotation(Controller.class);
+        String basePath = controllerAnnotation != null ? controllerAnnotation.value() : "";
+        String path = basePath + mapping.value();
+        
+        // Convert path to regex pattern
+        String regex = path
+            .replaceAll("\\*", ".*")  // Replace * with regex wildcard
+            .replaceAll("\\{([^}]+)}", "(?<$1>[^/]+)"); // Replace {param} with capture group
+        this.pathPattern = Pattern.compile("^" + regex + "$");
+        
+        // Extract path variable names
+        Matcher matcher = Pattern.compile("\\{([^}]+)}").matcher(path);
+        this.pathVariableNames = new String[0];
+        if (matcher.find()) {
+            this.pathVariableNames = new String[matcher.groupCount()];
+            matcher.reset();
+            int i = 0;
+            while (matcher.find()) {
+                this.pathVariableNames[i++] = matcher.group(1);
+            }
+        }
     }
 
     @Override
@@ -80,7 +115,29 @@ public class EndpointHandler extends HttpServlet {
         }
     }
 
-    private void handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    public void handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        // Check authentication if required
+        if (requiredRoles != null && requiredRoles.length > 0) {
+            if (!AuthMiddleware.process(req, resp)) {
+                return;
+            }
+
+            // Check if user has required role
+            String userRole = AuthMiddleware.getCurrentUserRole(req);
+            boolean hasRequiredRole = false;
+            for (String role : requiredRoles) {
+                if (role.equals(userRole)) {
+                    hasRequiredRole = true;
+                    break;
+                }
+            }
+
+            if (!hasRequiredRole) {
+                ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient permissions");
+                return;
+            }
+        }
+
         // Execute global middleware
         for (Middleware middleware : globalMiddleware) {
             if (!middleware.handle(req, resp)) {
@@ -113,6 +170,13 @@ public class EndpointHandler extends HttpServlet {
         Parameter[] parameters = method.getParameters();
         Object[] args = new Object[parameters.length];
 
+        // Extract path variables
+        String path = req.getRequestURI();
+        Matcher matcher = pathPattern.matcher(path);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Path does not match pattern");
+        }
+
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
             Class<?> type = parameter.getType();
@@ -121,6 +185,40 @@ public class EndpointHandler extends HttpServlet {
                 args[i] = req;
             } else if (type == HttpServletResponse.class) {
                 args[i] = resp;
+            } else if (parameter.isAnnotationPresent(AuthenticatedUser.class)) {
+                if (UserAuth.class.isAssignableFrom(type)) {
+                    // Create a UserAuth instance from the request attributes
+                    String id = AuthMiddleware.getCurrentUserId(req);
+                    String username = AuthMiddleware.getCurrentUsername(req);
+                    String role = AuthMiddleware.getCurrentUserRole(req);
+                    
+                    // Create an anonymous implementation of UserAuth
+                    args[i] = new UserAuth() {
+                        @Override
+                        public String getId() { return id; }
+                        @Override
+                        public String getUsername() { return username; }
+                        @Override
+                        public String getRole() { return role; }
+                    };
+                }
+            } else if (parameter.isAnnotationPresent(PathVariable.class)) {
+                PathVariable pathVar = parameter.getAnnotation(PathVariable.class);
+                String value = matcher.group(pathVar.value());
+                
+                try {
+                    Object convertedValue = convertValue(value, type);
+                    ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
+                    if (!result.isValid()) {
+                        throw new IllegalArgumentException(result.getFirstError());
+                    }
+                    args[i] = convertedValue;
+                } catch (Exception e) {
+                    if (e instanceof IllegalArgumentException) {
+                        throw e;
+                    }
+                    throw new IllegalArgumentException("Invalid path variable format for: " + pathVar.value());
+                }
             } else if (parameter.isAnnotationPresent(RequestBody.class)) {
                 try {
                     // Read and validate request body

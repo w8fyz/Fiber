@@ -69,9 +69,9 @@ public class DocumentationController {
             ErrorResponse.send(response, request.getRequestURI(), HttpServletResponse.SC_NOT_FOUND, "CSS file not found");
             return;
         }
-        
+        path = path.substring(1);
         System.out.println("Loading CSS: " + path);
-        byte[] content = readResource("docs/css" + path);
+        byte[] content = readResource(path);
         if (content != null) {
             System.out.println("Found CSS file, size: " + content.length);
             response.setContentType("text/css");
@@ -89,9 +89,9 @@ public class DocumentationController {
             ErrorResponse.send(response, request.getRequestURI(), HttpServletResponse.SC_NOT_FOUND, "JavaScript file not found");
             return;
         }
-        
+        path = path.substring(1);
         System.out.println("Loading JS: " + path);
-        byte[] content = readResource("docs/js" + path);
+        byte[] content = readResource(path);
         if (content != null) {
             System.out.println("Found JS file, size: " + content.length);
             response.setContentType("application/javascript");
