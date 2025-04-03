@@ -10,10 +10,15 @@ repositories {
 }
 
 dependencies {
+    implementation 'org.postgresql:postgresql:42.1.4'
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
     // Jetty Server
     implementation 'org.eclipse.jetty:jetty-server:11.0.15'
     implementation 'org.eclipse.jetty:jetty-servlet:11.0.15'
-    
+
+    //JWT
+    implementation 'io.jsonwebtoken:jjwt:0.12.6'
+
     // Jakarta Servlet API
     implementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
     
