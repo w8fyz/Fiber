@@ -7,16 +7,15 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import sh.fyz.fiber.annotations.AuthenticatedUser;
 import sh.fyz.fiber.annotations.Controller;
 import sh.fyz.fiber.annotations.RequestMapping;
-import sh.fyz.fiber.annotations.RequireRole;
-import sh.fyz.fiber.core.AuthMiddleware;
-import sh.fyz.fiber.core.AuthenticationService;
+import sh.fyz.fiber.core.authentication.AuthMiddleware;
+import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
-import sh.fyz.fiber.core.UserAuth;
+import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.docs.DocumentationController;
-import sh.fyz.fiber.handler.EndpointHandler;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
 import sh.fyz.fiber.handler.RouterServlet;
+import sh.fyz.fiber.core.security.filters.SecurityHeadersFilter;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -48,6 +47,9 @@ public class FiberServer {
 
         // Set up server
         server.setHandler(context);
+        
+        // Register security filter
+        context.addFilter(SecurityHeadersFilter.class, "/*", null);
     }
 
     public static FiberServer get() {
@@ -164,37 +166,5 @@ public class FiberServer {
 
     public void stop() throws Exception {
         server.stop();
-    }
-
-    /**
-     * Process method parameters and inject authenticated user if requested
-     */
-    public static Object[] processParameters(Method method, HttpServletRequest request) {
-        Parameter[] parameters = method.getParameters();
-        Object[] args = new Object[parameters.length];
-
-        for (int i = 0; i < parameters.length; i++) {
-            Parameter param = parameters[i];
-            if (param.isAnnotationPresent(AuthenticatedUser.class)) {
-                if (UserAuth.class.isAssignableFrom(param.getType())) {
-                    // Create a UserAuth instance from the request attributes
-                    String id = AuthMiddleware.getCurrentUserId(request);
-                    String username = AuthMiddleware.getCurrentUsername(request);
-                    String role = AuthMiddleware.getCurrentUserRole(request);
-                    
-                    // Create an anonymous implementation of UserAuth
-                    args[i] = new UserAuth() {
-                        @Override
-                        public String getId() { return id; }
-                        @Override
-                        public String getUsername() { return username; }
-                        @Override
-                        public String getRole() { return role; }
-                    };
-                }
-            }
-        }
-
-        return args;
     }
 } 

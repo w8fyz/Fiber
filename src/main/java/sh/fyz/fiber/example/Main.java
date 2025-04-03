@@ -19,7 +19,7 @@ public class Main {
                                 new PostgreSQLAuth(
                                         "host.docker.internal",
                                         5432, "fiber"),
-                                "postgres" ,"", 16));
+                                "postgres" ,"75395185Aa===", 16));
         architect.start();
 
         // Create server

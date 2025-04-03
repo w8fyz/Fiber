@@ -356,7 +356,6 @@ formatJson.addEventListener('click', () => {
 
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
-        // Show success feedback
     }).catch(err => {
         console.error('Failed to copy text:', err);
     });

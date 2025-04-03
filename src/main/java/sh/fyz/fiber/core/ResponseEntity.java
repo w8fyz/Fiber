@@ -43,7 +43,7 @@ public class ResponseEntity<T> {
         return new ResponseEntity<>(body, 500);
     }
 
-    public static ResponseEntity<String> unauthorized(String reason) {
+    public static <T> ResponseEntity<T> unauthorized(T reason) {
         return new ResponseEntity<>(reason, 401);
     }
 

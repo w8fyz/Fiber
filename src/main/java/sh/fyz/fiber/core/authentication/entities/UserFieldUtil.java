@@ -1,7 +1,7 @@
-package sh.fyz.fiber.core;
+package sh.fyz.fiber.core.authentication.entities;
 
-import sh.fyz.fiber.core.annotations.IdentifierField;
-import sh.fyz.fiber.core.annotations.PasswordField;
+import sh.fyz.fiber.core.authentication.annotations.IdentifierField;
+import sh.fyz.fiber.core.authentication.annotations.PasswordField;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;

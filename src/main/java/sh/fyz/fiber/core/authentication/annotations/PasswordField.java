@@ -1,4 +1,4 @@
-package sh.fyz.fiber.core.annotations;
+package sh.fyz.fiber.core.authentication.annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

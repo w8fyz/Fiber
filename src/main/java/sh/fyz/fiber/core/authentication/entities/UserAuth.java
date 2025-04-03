@@ -1,4 +1,4 @@
-package sh.fyz.fiber.core;
+package sh.fyz.fiber.core.authentication.entities;
 
 /**
  * Interface defining basic user authentication information.

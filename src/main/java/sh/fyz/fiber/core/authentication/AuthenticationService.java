@@ -1,0 +1,134 @@
+package sh.fyz.fiber.core.authentication;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.fiber.core.JwtUtil;
+import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
+
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+public abstract class AuthenticationService<T extends UserAuth> {
+
+    private final GenericRepository<T> userRepository;
+    private final Map<String, Integer> loginAttempts = new ConcurrentHashMap<>();
+    private final Map<String, Instant> lastLoginAttempt = new ConcurrentHashMap<>();
+    private static final int MAX_LOGIN_ATTEMPTS = 5;
+    private static final int LOGIN_TIMEOUT_MINUTES = 15;
+    private String refreshTokenPath = "/auth";
+
+    public AuthenticationService(GenericRepository<T> userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public void setRefreshTokenPath(String path) {
+        this.refreshTokenPath = path;
+    }
+
+    public Class<T> getUserClass() {
+        return userRepository.getEntityClass();
+    }
+
+    public T getUserById(Object id) {
+        return userRepository.findById(id);
+    }
+
+    public boolean validateCredentials(Object id, String password) {
+        T user = userRepository.findById(id);
+        if (user == null) {
+            return false;
+        }
+        return UserFieldUtil.validatePassword(user, password);
+    }
+
+    public UserAuth findUserByIdentifer(String identifier) {
+        return UserFieldUtil.findUserByIdentifier(identifier, userRepository.all());
+    }
+
+    public String generateToken(UserAuth user, HttpServletRequest request) {
+        String ipAddress = getClientIpAddress(request);
+        String userAgent = request.getHeader("User-Agent");
+        return JwtUtil.generateToken(user, ipAddress, userAgent);
+    }
+
+    public boolean validateToken(String token, HttpServletRequest request) {
+        String ipAddress = getClientIpAddress(request);
+        String userAgent = request.getHeader("User-Agent");
+        return JwtUtil.validateToken(token, ipAddress, userAgent);
+    }
+
+    public void setAuthCookies(UserAuth user, HttpServletRequest request, HttpServletResponse response) {
+        String accessToken = generateToken(user, request);
+        String refreshToken = JwtUtil.generateRefreshToken(user, getClientIpAddress(request), request.getHeader("User-Agent"));
+        
+        // Set access token cookie
+        response.addHeader("Set-Cookie", 
+            "access_token=" + accessToken + 
+            "; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600");
+        
+        // Set refresh token cookie
+        response.addHeader("Set-Cookie", 
+            "refresh_token=" + refreshToken + 
+            "; HttpOnly; Secure; SameSite=Strict; Path=" + refreshTokenPath + "; Max-Age=604800");
+    }
+
+    public void clearAuthCookies(HttpServletResponse response) {
+        // Clear access token cookie
+        response.addHeader("Set-Cookie", 
+            "access_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0");
+        
+        // Clear refresh token cookie
+        response.addHeader("Set-Cookie", 
+            "refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=" + refreshTokenPath + "; Max-Age=0");
+    }
+
+    public boolean isLoginBlocked(String identifier) {
+        Integer attempts = loginAttempts.get(identifier);
+        Instant lastAttempt = lastLoginAttempt.get(identifier);
+        
+        if (attempts != null && attempts >= MAX_LOGIN_ATTEMPTS) {
+            if (lastAttempt != null && 
+                Instant.now().isBefore(lastAttempt.plusSeconds(LOGIN_TIMEOUT_MINUTES * 60))) {
+                return true;
+            } else {
+                // Reset attempts if timeout has passed
+                loginAttempts.remove(identifier);
+                lastLoginAttempt.remove(identifier);
+            }
+        }
+        return false;
+    }
+
+    public void recordFailedLoginAttempt(String identifier) {
+        loginAttempts.merge(identifier, 1, Integer::sum);
+        lastLoginAttempt.put(identifier, Instant.now());
+    }
+
+    public void resetLoginAttempts(String identifier) {
+        loginAttempts.remove(identifier);
+        lastLoginAttempt.remove(identifier);
+    }
+
+    public String getClientIpAddress(HttpServletRequest request) {
+        String ipAddress = request.getHeader("X-Forwarded-For");
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getHeader("Proxy-Client-IP");
+        }
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getHeader("HTTP_CLIENT_IP");
+        }
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getHeader("HTTP_X_FORWARDED_FOR");
+        }
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getRemoteAddr();
+        }
+        return ipAddress;
+    }
+} 

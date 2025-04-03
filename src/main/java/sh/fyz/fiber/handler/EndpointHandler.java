@@ -12,10 +12,10 @@ import sh.fyz.fiber.annotations.PathVariable;
 import sh.fyz.fiber.annotations.RequestBody;
 import sh.fyz.fiber.annotations.RequestMapping;
 import sh.fyz.fiber.annotations.Controller;
-import sh.fyz.fiber.core.AuthMiddleware;
+import sh.fyz.fiber.core.authentication.AuthMiddleware;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.ResponseEntity;
-import sh.fyz.fiber.core.UserAuth;
+import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationRegistry;
 import sh.fyz.fiber.validation.ValidationResult;
@@ -279,5 +279,13 @@ public class EndpointHandler extends HttpServlet {
         } else {
             throw new IllegalArgumentException("Unsupported type: " + type);
         }
+    }
+
+    public Method getMethod() {
+        return method;
+    }
+
+    public Parameter[] getParameters() {
+        return method.getParameters();
     }
 } 

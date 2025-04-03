@@ -1,10 +1,11 @@
-package sh.fyz.fiber.core;
+package sh.fyz.fiber.core.authentication;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.ErrorResponse;
-import sh.fyz.fiber.example.User;
+import sh.fyz.fiber.core.JwtUtil;
+import sh.fyz.fiber.core.authentication.entities.UserAuth;
 
 /**
  * Middleware for handling authentication using Bearer tokens.
@@ -50,8 +51,8 @@ public class AuthMiddleware {
     /**
      * Get the current user ID from the request attributes
      */
-    public static String getCurrentUserId(HttpServletRequest req) {
-        return (String) req.getAttribute(USER_ID_ATTRIBUTE);
+    public static Object getCurrentUserId(HttpServletRequest req) {
+        return req.getAttribute(USER_ID_ATTRIBUTE);
     }
 
     /**
