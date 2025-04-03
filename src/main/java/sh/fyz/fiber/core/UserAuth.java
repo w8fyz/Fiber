@@ -9,7 +9,7 @@ public interface UserAuth {
      * Get the unique identifier of the user
      * @return The user's ID
      */
-    String getId();
+    Object getId();
 
     /**
      * Get the username of the user

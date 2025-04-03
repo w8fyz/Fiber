@@ -6,6 +6,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import sh.fyz.architect.entities.IdentifiableEntity;
 import sh.fyz.fiber.core.UserAuth;
+import sh.fyz.fiber.core.annotations.IdentifierField;
+import sh.fyz.fiber.core.annotations.PasswordField;
 import sh.fyz.fiber.validation.Email;
 import sh.fyz.fiber.validation.Min;
 import sh.fyz.fiber.validation.NotBlank;
@@ -26,6 +28,12 @@ public class User implements IdentifiableEntity, UserAuth {
     @NotBlank
     @Email
     private String email;
+
+    @IdentifierField
+    private String username;
+
+    @PasswordField
+    private String password;
 
     private String role;
 
@@ -51,12 +59,24 @@ public class User implements IdentifiableEntity, UserAuth {
     public void setRole(String role) { this.role = role; }
 
     @Override
-    public String getId() {
-        return String.valueOf(id);
+    public Object getId() {
+        return id;
     }
 
     @Override
     public String getUsername() {
         return name;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
     }
 }

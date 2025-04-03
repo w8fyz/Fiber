@@ -9,6 +9,7 @@ import sh.fyz.fiber.annotations.Controller;
 import sh.fyz.fiber.annotations.RequestMapping;
 import sh.fyz.fiber.annotations.RequireRole;
 import sh.fyz.fiber.core.AuthMiddleware;
+import sh.fyz.fiber.core.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.UserAuth;
 import sh.fyz.fiber.docs.DocumentationController;
@@ -23,6 +24,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FiberServer {
+
+    private AuthenticationService<?> authService;
+    private static FiberServer instance;
     private final Server server;
     private final ServletContextHandler context;
     private final List<Middleware> globalMiddleware;
@@ -31,6 +35,7 @@ public class FiberServer {
     private boolean documentationEnabled;
 
     public FiberServer(int port) {
+        instance = this;
         this.server = new Server(port);
         this.context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         this.globalMiddleware = new ArrayList<>();
@@ -43,6 +48,24 @@ public class FiberServer {
 
         // Set up server
         server.setHandler(context);
+    }
+
+    public static FiberServer get() {
+        if (instance == null) {
+            throw new IllegalStateException("FiberServer has not been initialized");
+        }
+        return instance;
+    }
+
+    public void setAuthService(AuthenticationService<?> authService) {
+        this.authService = authService;
+    }
+
+    public AuthenticationService<?> getAuthService() {
+        if (authService == null) {
+            throw new IllegalStateException("AuthenticationService has not been set");
+        }
+        return authService;
     }
 
     /**

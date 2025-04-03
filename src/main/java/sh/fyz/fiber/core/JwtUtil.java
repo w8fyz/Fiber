@@ -22,13 +22,15 @@ public class JwtUtil {
     /**
      * Generate a JWT token for a user
      * @param userAuth The user to generate the token for
+     * @param ipAddress The IP address from which the token is generated
+     * @param userAgent The user agent from which the token is generated
      * @return The generated JWT token
      */
-    public static String generateToken(UserAuth userAuth) {
+    public static String generateToken(UserAuth userAuth, String ipAddress, String userAgent) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userAuth.getId());
-        claims.put("username", userAuth.getUsername());
-        claims.put("role", userAuth.getRole());
+        claims.put("ip", ipAddress);
+        claims.put("userAgent", userAgent);
         return createToken(claims);
     }
 
@@ -49,15 +51,30 @@ public class JwtUtil {
     /**
      * Validate a JWT token
      * @param token The token to validate
+     * @param ipAddress The IP address from which the token is validated
+     * @param userAgent The user agent from which the token is validated
      * @return true if the token is valid, false otherwise
      */
-    public static boolean validateToken(String token) {
+    public static boolean validateToken(String token, String ipAddress, String userAgent) {
         try {
-            Jwts.parser()
+            Claims claims = Jwts.parser()
                 .setSigningKey(key)
                 .build()
-                .parseClaimsJws(token);
-            return true;
+                .parseClaimsJws(token)
+                .getBody();
+            
+            // Check if the IP address matches
+            String tokenIp = claims.get("ip", String.class);
+            String tokenUserAgent = claims.get("userAgent", String.class);
+            
+            // For localhost, we only check user agent
+            if (ipAddress.equals("127.0.0.1") || ipAddress.equals("0:0:0:0:0:0:0:1")) {
+                return tokenUserAgent != null && tokenUserAgent.equals(userAgent);
+            }
+            
+            // For non-localhost, check both IP and user agent
+            return tokenIp != null && tokenIp.equals(ipAddress) && 
+                   tokenUserAgent != null && tokenUserAgent.equals(userAgent);
         } catch (Exception e) {
             return false;
         }
@@ -94,23 +111,5 @@ public class JwtUtil {
      */
     public static String extractId(String token) {
         return extractClaim(token, claims -> claims.get("id", String.class));
-    }
-
-    /**
-     * Extract the username from a token
-     * @param token The token to extract the username from
-     * @return The username
-     */
-    public static String extractUsername(String token) {
-        return extractClaim(token, claims -> claims.get("username", String.class));
-    }
-
-    /**
-     * Extract the role from a token
-     * @param token The token to extract the role from
-     * @return The role
-     */
-    public static String extractRole(String token) {
-        return extractClaim(token, claims -> claims.get("role", String.class));
     }
 } 

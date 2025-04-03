@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.AuthenticatedUser;
 import sh.fyz.fiber.annotations.Param;
 import sh.fyz.fiber.annotations.PathVariable;
@@ -116,25 +117,36 @@ public class EndpointHandler extends HttpServlet {
     }
 
     public void handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // Check authentication if required
-        if (requiredRoles != null && requiredRoles.length > 0) {
+        // Check if method requires authentication (either through roles or @AuthenticatedUser)
+        boolean requiresAuth = requiredRoles != null && requiredRoles.length > 0;
+        for (Parameter parameter : method.getParameters()) {
+            if (parameter.isAnnotationPresent(AuthenticatedUser.class)) {
+                requiresAuth = true;
+                break;
+            }
+        }
+
+        // Process authentication if required
+        if (requiresAuth) {
             if (!AuthMiddleware.process(req, resp)) {
                 return;
             }
 
             // Check if user has required role
-            String userRole = AuthMiddleware.getCurrentUserRole(req);
-            boolean hasRequiredRole = false;
-            for (String role : requiredRoles) {
-                if (role.equals(userRole)) {
-                    hasRequiredRole = true;
-                    break;
+            if (requiredRoles != null && requiredRoles.length > 0) {
+                String userRole = AuthMiddleware.getCurrentUserRole(req);
+                boolean hasRequiredRole = false;
+                for (String role : requiredRoles) {
+                    if (role.equals(userRole)) {
+                        hasRequiredRole = true;
+                        break;
+                    }
                 }
-            }
 
-            if (!hasRequiredRole) {
-                ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient permissions");
-                return;
+                if (!hasRequiredRole) {
+                    ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient permissions");
+                    return;
+                }
             }
         }
 
@@ -187,20 +199,11 @@ public class EndpointHandler extends HttpServlet {
                 args[i] = resp;
             } else if (parameter.isAnnotationPresent(AuthenticatedUser.class)) {
                 if (UserAuth.class.isAssignableFrom(type)) {
-                    // Create a UserAuth instance from the request attributes
-                    String id = AuthMiddleware.getCurrentUserId(req);
-                    String username = AuthMiddleware.getCurrentUsername(req);
-                    String role = AuthMiddleware.getCurrentUserRole(req);
-                    
-                    // Create an anonymous implementation of UserAuth
-                    args[i] = new UserAuth() {
-                        @Override
-                        public String getId() { return id; }
-                        @Override
-                        public String getUsername() { return username; }
-                        @Override
-                        public String getRole() { return role; }
-                    };
+                    args[i] = AuthMiddleware.getCurrentUser(req);
+                } else if(FiberServer.get().getAuthService().getUserClass().isAssignableFrom(type)) {
+                    args[i] = FiberServer.get().getAuthService().getUserById(AuthMiddleware.getCurrentUserId(req));
+                } else {
+                    throw new IllegalArgumentException("Invalid type for @AuthenticatedUser: " + type);
                 }
             } else if (parameter.isAnnotationPresent(PathVariable.class)) {
                 PathVariable pathVar = parameter.getAnnotation(PathVariable.class);

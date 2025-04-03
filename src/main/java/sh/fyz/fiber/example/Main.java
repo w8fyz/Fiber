@@ -7,6 +7,8 @@ import sh.fyz.architect.persistant.sql.provider.PostgreSQLAuth;
 import sh.fyz.fiber.FiberServer;
 
 public class Main {
+
+    public static UserRepository userRepository;
     public static void main(String[] args) throws Exception {
 
         Architect architect = new Architect().setRedisCredentials(
@@ -17,7 +19,7 @@ public class Main {
                                 new PostgreSQLAuth(
                                         "host.docker.internal",
                                         5432, "fiber"),
-                                "postgres" ,"75395185Aa===", 16));
+                                "postgres" ,"", 16));
         architect.start();
 
         // Create server
@@ -28,7 +30,9 @@ public class Main {
         
         // Register controllers
         server.registerController(ExampleController.class);
-        server.registerController(UserCrudController.class);
+        server.registerController(AuthController.class);
+        userRepository = new UserRepository();
+        server.setAuthService(new ImplAuthService(userRepository));
 
         // Start the server
         server.start();

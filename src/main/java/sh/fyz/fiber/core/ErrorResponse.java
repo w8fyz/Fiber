@@ -29,10 +29,14 @@ public class ErrorResponse {
         return message;
     }
 
-    public static void send(HttpServletResponse response, String uri, int status, String message) throws IOException {
+    public static void send(HttpServletResponse response, String uri, int status, String message) {
         response.setStatus(status);
         response.setContentType("application/json");
         ErrorResponse error = new ErrorResponse(uri, status, message);
-        objectMapper.writeValue(response.getWriter(), error);
+        try {
+            objectMapper.writeValue(response.getWriter(), error);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 } 
