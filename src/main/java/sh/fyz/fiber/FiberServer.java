@@ -16,6 +16,7 @@ import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
 import sh.fyz.fiber.handler.RouterServlet;
 import sh.fyz.fiber.core.security.filters.SecurityHeadersFilter;
+import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -25,6 +26,7 @@ import java.util.List;
 public class FiberServer {
 
     private AuthenticationService<?> authService;
+    private OAuth2AuthenticationService<?> oauthService;
     private static FiberServer instance;
     private final Server server;
     private final ServletContextHandler context;
@@ -68,6 +70,17 @@ public class FiberServer {
             throw new IllegalStateException("AuthenticationService has not been set");
         }
         return authService;
+    }
+    
+    public void setOAuthService(OAuth2AuthenticationService<?> oauthService) {
+        this.oauthService = oauthService;
+    }
+    
+    public OAuth2AuthenticationService<?> getOAuthService() {
+        if (oauthService == null) {
+            throw new IllegalStateException("OAuth2AuthenticationService has not been set");
+        }
+        return oauthService;
     }
 
     /**

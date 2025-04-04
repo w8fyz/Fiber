@@ -19,6 +19,7 @@ import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationRegistry;
 import sh.fyz.fiber.validation.ValidationResult;
+import sh.fyz.fiber.util.JsonUtil;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -26,6 +27,7 @@ import java.lang.reflect.Parameter;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class EndpointHandler extends HttpServlet {
     private final Object controller;
@@ -116,7 +118,7 @@ public class EndpointHandler extends HttpServlet {
         }
     }
 
-    public void handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    public Object handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         // Check if method requires authentication (either through roles or @AuthenticatedUser)
         boolean requiresAuth = requiredRoles != null && requiredRoles.length > 0;
         for (Parameter parameter : method.getParameters()) {
@@ -129,7 +131,7 @@ public class EndpointHandler extends HttpServlet {
         // Process authentication if required
         if (requiresAuth) {
             if (!AuthMiddleware.process(req, resp)) {
-                return;
+                return null;
             }
 
             // Check if user has required role
@@ -145,58 +147,62 @@ public class EndpointHandler extends HttpServlet {
 
                 if (!hasRequiredRole) {
                     ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient permissions");
-                    return;
+                    return null;
                 }
             }
         }
 
         // Execute global middleware
         for (Middleware middleware : globalMiddleware) {
-            if (!middleware.handle(req, resp)) {
-                return;
+            if (!middleware.process(req, resp)) {
+                return null;
             }
         }
-
-        try {
-            Object[] args = prepareMethodArguments(req, resp);
-            Object result = method.invoke(controller, args);
-            
-            // Handle response
-            if (result instanceof ResponseEntity) {
-                ((ResponseEntity<?>) result).write(resp);
-            } else if (result != null) {
-                resp.setContentType("application/json");
-                objectMapper.writeValue(resp.getWriter(), result);
-            }
-            // If result is null and method is void, assume the method wrote directly to the response
-        } catch (Exception e) {
-            if (e instanceof IllegalArgumentException) {
-                ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
-            } else {
-                ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal server error");
-            }
-        }
-    }
-
-    private Object[] prepareMethodArguments(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        Parameter[] parameters = method.getParameters();
-        Object[] args = new Object[parameters.length];
 
         // Extract path variables
         String path = req.getRequestURI();
-        Matcher matcher = pathPattern.matcher(path);
+        Pattern pattern = Pattern.compile(pathPattern);
+        Matcher matcher = pattern.matcher(path);
         if (!matcher.matches()) {
-            throw new IllegalArgumentException("Path does not match pattern");
+            ErrorResponse.send(resp, path, HttpServletResponse.SC_NOT_FOUND, "Path not found");
+            return null;
         }
 
-        for (int i = 0; i < parameters.length; i++) {
-            Parameter parameter = parameters[i];
+        // Prepare method arguments
+        Object[] args = new Object[method.getParameterCount()];
+        for (int i = 0; i < method.getParameterCount(); i++) {
+            Parameter parameter = method.getParameters()[i];
             Class<?> type = parameter.getType();
 
             if (type == HttpServletRequest.class) {
                 args[i] = req;
             } else if (type == HttpServletResponse.class) {
                 args[i] = resp;
+            } else if (parameter.isAnnotationPresent(RequestBody.class)) {
+                try {
+                    String body = req.getReader().lines().collect(Collectors.joining());
+                    args[i] = JsonUtil.fromJson(body, type);
+                } catch (Exception e) {
+                    ErrorResponse.send(resp, path, HttpServletResponse.SC_BAD_REQUEST, "Invalid request body");
+                    return null;
+                }
+            } else if (parameter.isAnnotationPresent(Param.class)) {
+                Param param = parameter.getAnnotation(Param.class);
+                String value = req.getParameter(param.value());
+                
+                try {
+                    Object convertedValue = convertValue(value, type);
+                    ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
+                    if (!result.isValid()) {
+                        throw new IllegalArgumentException(result.getFirstError());
+                    }
+                    args[i] = convertedValue;
+                } catch (Exception e) {
+                    if (e instanceof IllegalArgumentException) {
+                        throw e;
+                    }
+                    throw new IllegalArgumentException("Invalid parameter format for: " + param.value());
+                }
             } else if (parameter.isAnnotationPresent(AuthenticatedUser.class)) {
                 if (UserAuth.class.isAssignableFrom(type)) {
                     args[i] = AuthMiddleware.getCurrentUser(req);
@@ -222,43 +228,27 @@ public class EndpointHandler extends HttpServlet {
                     }
                     throw new IllegalArgumentException("Invalid path variable format for: " + pathVar.value());
                 }
-            } else if (parameter.isAnnotationPresent(RequestBody.class)) {
-                try {
-                    // Read and validate request body
-                    Object body = objectMapper.readValue(req.getReader(), type);
-                    ValidationResult result = ValidationRegistry.validate(body);
-                    if (!result.isValid()) {
-                        throw new IllegalArgumentException(result.getFirstError());
-                    }
-                    args[i] = body;
-                } catch (Exception e) {
-                    if (e instanceof IllegalArgumentException) {
-                        throw e;
-                    }
-                    throw new IllegalArgumentException("Invalid request body format");
-                }
-            } else if (parameter.isAnnotationPresent(Param.class)) {
-                // Read and validate parameter
-                Param param = parameter.getAnnotation(Param.class);
-                String value = req.getParameter(param.value());
-                
-                try {
-                    Object convertedValue = convertValue(value, type);
-                    ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
-                    if (!result.isValid()) {
-                        throw new IllegalArgumentException(result.getFirstError());
-                    }
-                    args[i] = convertedValue;
-                } catch (Exception e) {
-                    if (e instanceof IllegalArgumentException) {
-                        throw e;
-                    }
-                    throw new IllegalArgumentException("Invalid parameter format for: " + param.value());
-                }
+            } else {
+                throw new IllegalArgumentException("Unsupported parameter type: " + type);
             }
         }
 
-        return args;
+        try {
+            // Invoke the method
+            Object result = method.invoke(controller, args);
+            
+            // Handle the response
+            if (result instanceof ResponseEntity) {
+                ((ResponseEntity<?>) result).write(resp);
+            } else {
+                resp.setContentType("application/json");
+                resp.getWriter().write(JsonUtil.toJson(result));
+            }
+            
+            return result;
+        } catch (Exception e) {
+            throw new ServletException("Failed to invoke endpoint method", e);
+        }
     }
 
     private Object convertValue(String value, Class<?> type) {

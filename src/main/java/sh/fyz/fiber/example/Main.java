@@ -5,6 +5,7 @@ import sh.fyz.architect.cache.RedisCredentials;
 import sh.fyz.architect.persistant.DatabaseCredentials;
 import sh.fyz.architect.persistant.sql.provider.PostgreSQLAuth;
 import sh.fyz.fiber.FiberServer;
+import sh.fyz.fiber.core.authentication.AuthenticationService;
 
 public class Main {
 
@@ -32,6 +33,9 @@ public class Main {
         server.registerController(ExampleController.class);
         server.registerController(AuthController.class);
         userRepository = new UserRepository();
+
+        ImplAuthService authService = new ImplAuthService(userRepository);
+        server.setOAuthService(new OAuthService(authService, userRepository));
         server.setAuthService(new ImplAuthService(userRepository));
 
         // Start the server
