@@ -20,6 +20,8 @@ import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationRegistry;
 import sh.fyz.fiber.validation.ValidationResult;
 import sh.fyz.fiber.util.JsonUtil;
+import sh.fyz.fiber.handler.parameter.ParameterHandler;
+import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -168,72 +170,29 @@ public class EndpointHandler extends HttpServlet {
             return null;
         }
 
-        // Prepare method arguments
-        Object[] args = new Object[method.getParameterCount()];
-        for (int i = 0; i < method.getParameterCount(); i++) {
-            Parameter parameter = method.getParameters()[i];
-            Class<?> type = parameter.getType();
-
-            if (type == HttpServletRequest.class) {
-                args[i] = req;
-            } else if (type == HttpServletResponse.class) {
-                args[i] = resp;
-            } else if (parameter.isAnnotationPresent(RequestBody.class)) {
+        try {
+            // Prepare method arguments using parameter handlers
+            Object[] args = new Object[method.getParameterCount()];
+            for (int i = 0; i < method.getParameterCount(); i++) {
+                Parameter parameter = method.getParameters()[i];
+                ParameterHandler handler = ParameterHandlerRegistry.findHandler(parameter);
+                
+                if (handler == null) {
+                    throw new IllegalArgumentException("No handler found for parameter: " + parameter.getName());
+                }
+                
                 try {
-                    String body = req.getReader().lines().collect(Collectors.joining());
-                    args[i] = JsonUtil.fromJson(body, type);
+                    args[i] = handler.handle(parameter, req, resp, matcher);
                 } catch (Exception e) {
-                    ErrorResponse.send(resp, path, HttpServletResponse.SC_BAD_REQUEST, "Invalid request body");
+                    if (e instanceof IllegalArgumentException) {
+                        ErrorResponse.send(resp, path, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+                    } else {
+                        ErrorResponse.send(resp, path, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal server error");
+                    }
                     return null;
                 }
-            } else if (parameter.isAnnotationPresent(Param.class)) {
-                Param param = parameter.getAnnotation(Param.class);
-                String value = req.getParameter(param.value());
-                
-                try {
-                    Object convertedValue = convertValue(value, type);
-                    ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
-                    if (!result.isValid()) {
-                        throw new IllegalArgumentException(result.getFirstError());
-                    }
-                    args[i] = convertedValue;
-                } catch (Exception e) {
-                    if (e instanceof IllegalArgumentException) {
-                        throw e;
-                    }
-                    throw new IllegalArgumentException("Invalid parameter format for: " + param.value());
-                }
-            } else if (parameter.isAnnotationPresent(AuthenticatedUser.class)) {
-                if (UserAuth.class.isAssignableFrom(type)) {
-                    args[i] = AuthMiddleware.getCurrentUser(req);
-                } else if(FiberServer.get().getAuthService().getUserClass().isAssignableFrom(type)) {
-                    args[i] = FiberServer.get().getAuthService().getUserById(AuthMiddleware.getCurrentUserId(req));
-                } else {
-                    throw new IllegalArgumentException("Invalid type for @AuthenticatedUser: " + type);
-                }
-            } else if (parameter.isAnnotationPresent(PathVariable.class)) {
-                PathVariable pathVar = parameter.getAnnotation(PathVariable.class);
-                String value = matcher.group(pathVar.value());
-                
-                try {
-                    Object convertedValue = convertValue(value, type);
-                    ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
-                    if (!result.isValid()) {
-                        throw new IllegalArgumentException(result.getFirstError());
-                    }
-                    args[i] = convertedValue;
-                } catch (Exception e) {
-                    if (e instanceof IllegalArgumentException) {
-                        throw e;
-                    }
-                    throw new IllegalArgumentException("Invalid path variable format for: " + pathVar.value());
-                }
-            } else {
-                throw new IllegalArgumentException("Unsupported parameter type: " + type);
             }
-        }
 
-        try {
             // Invoke the method
             Object result = method.invoke(controller, args);
             
@@ -248,26 +207,6 @@ public class EndpointHandler extends HttpServlet {
             return result;
         } catch (Exception e) {
             throw new ServletException("Failed to invoke endpoint method", e);
-        }
-    }
-
-    private Object convertValue(String value, Class<?> type) {
-        if (value == null) {
-            return null;
-        }
-
-        if (type == String.class) {
-            return value;
-        } else if (type == Integer.class || type == int.class) {
-            return Integer.parseInt(value);
-        } else if (type == Long.class || type == long.class) {
-            return Long.parseLong(value);
-        } else if (type == Double.class || type == double.class) {
-            return Double.parseDouble(value);
-        } else if (type == Boolean.class || type == boolean.class) {
-            return Boolean.parseBoolean(value);
-        } else {
-            throw new IllegalArgumentException("Unsupported type: " + type);
         }
     }
 

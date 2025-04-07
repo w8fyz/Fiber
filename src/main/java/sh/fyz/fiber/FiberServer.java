@@ -17,6 +17,7 @@ import sh.fyz.fiber.validation.ValidationInitializer;
 import sh.fyz.fiber.handler.RouterServlet;
 import sh.fyz.fiber.core.security.filters.SecurityHeadersFilter;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
+import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -46,6 +47,9 @@ public class FiberServer {
 
         // Initialize validation system
         ValidationInitializer.initialize();
+
+        // Initialize parameter handlers
+        ParameterHandlerRegistry.initialize();
 
         // Set up server
         server.setHandler(context);
