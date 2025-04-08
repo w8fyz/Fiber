@@ -12,12 +12,16 @@ import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.security.logging.AuditLogger;
 import sh.fyz.fiber.core.security.processors.RateLimitProcessor;
+import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Controller("/auth")
 public class AuthController {
+
     
     public AuthController() {
     }
@@ -53,6 +57,53 @@ public class AuthController {
         }
         
         return ResponseEntity.unauthorized(Map.of("error", "Invalid credentials"));
+    }
+
+    @RequestMapping(value = "/oauth/{provider}/login", method = RequestMapping.Method.GET)
+    @AuditLog(action = "OAUTH_LOGIN_START", logParameters = true)
+    public void oauthLogin(
+            @PathVariable("provider") String provider,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        OAuth2Provider<?> oauthProvider = FiberServer.get().getOAuthService().getProvider(provider);
+        if (oauthProvider != null) {
+            String redirectUrl = FiberServer.get().getOAuthService().getAuthorizationUrl(provider, request.getRequestURL().toString() + "/callback");
+            response.setHeader("Location", redirectUrl);
+            response.setStatus(HttpServletResponse.SC_FOUND);
+        } else {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        }
+    }
+
+    @RequestMapping(value = "/oauth/{provider}/login/callback", method = RequestMapping.Method.GET)
+    @AuditLog(action = "OAUTH_CALLBACK", logParameters = true)
+    public void oauthCallback(
+            @PathVariable("provider") String provider,
+            @Param("code") String code,
+            @Param("state") String state,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        OAuth2Provider<User> oauthProvider = (OAuth2Provider<User>) FiberServer.get().getOAuthService().getProvider(provider);
+        if (oauthProvider != null) {
+            try {
+                User user = (User) FiberServer.get().getOAuthService().handleCallback(code, state, "", request, response);
+                if (user != null) {
+                    AuthenticationService<?> authService = FiberServer.get().getAuthService();
+                    authService.setAuthCookies(user, request, response);
+                    response.sendRedirect("/dashboard"); // Redirect to your app's dashboard
+                } else {
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "OAuth authentication failed");
+                }
+            } catch (Exception e) {
+                try {
+                    response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "OAuth authentication error");
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+        } else {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        }
     }
 
     @RequestMapping(value = "/refresh", method = RequestMapping.Method.POST)

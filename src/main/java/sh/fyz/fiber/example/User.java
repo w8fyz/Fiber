@@ -37,6 +37,12 @@ public class User implements IdentifiableEntity, UserAuth {
 
     private String role;
 
+    // OAuth2 specific fields
+    private String providerId;
+    private String externalId;
+    private String avatar;
+    private String discriminator;
+
     // Default constructor for Jackson
     public User() {}
 
@@ -58,6 +64,16 @@ public class User implements IdentifiableEntity, UserAuth {
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
 
+    // OAuth2 getters and setters
+    public String getProviderId() { return providerId; }
+    public void setProviderId(String providerId) { this.providerId = providerId; }
+    public String getExternalId() { return externalId; }
+    public void setExternalId(String externalId) { this.externalId = externalId; }
+    public String getAvatar() { return avatar; }
+    public void setAvatar(String avatar) { this.avatar = avatar; }
+    public String getDiscriminator() { return discriminator; }
+    public void setDiscriminator(String discriminator) { this.discriminator = discriminator; }
+
     @Override
     public Object getId() {
         return id;
@@ -65,7 +81,7 @@ public class User implements IdentifiableEntity, UserAuth {
 
     @Override
     public String getUsername() {
-        return name;
+        return username;
     }
 
     public String getPassword() {

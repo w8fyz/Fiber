@@ -44,7 +44,7 @@ public class DiscordOAuth2Provider<T extends UserAuth> extends AbstractOAuth2Pro
     }
 
     @Override
-    public Map<String, Object> getUserInfo(String accessToken) {
+    public Map<String, String> getUserInfo(String accessToken) {
         return getUserInfoFromToken(accessToken);
     }
     

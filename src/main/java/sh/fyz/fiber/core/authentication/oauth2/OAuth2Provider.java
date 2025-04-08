@@ -38,7 +38,7 @@ public interface OAuth2Provider<T extends UserAuth> {
      * @param accessToken The OAuth2 access token
      * @return Map containing user information
      */
-    Map<String, Object> getUserInfo(String accessToken);
+    Map<String, String> getUserInfo(String accessToken);
 
     /**
      * Get the provider's client ID

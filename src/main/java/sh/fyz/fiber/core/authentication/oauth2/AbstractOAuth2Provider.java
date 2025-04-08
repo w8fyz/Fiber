@@ -96,7 +96,7 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
         }
     }
 
-    protected Map<String, Object> getUserInfoFromToken(String accessToken) {
+    protected Map<String, String> getUserInfoFromToken(String accessToken) {
         try {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(java.net.URI.create(userInfoEndpoint))

@@ -35,7 +35,9 @@ public class Main {
         userRepository = new UserRepository();
 
         ImplAuthService authService = new ImplAuthService(userRepository);
-        server.setOAuthService(new OAuthService(authService, userRepository));
+        OAuthService oauthService = new OAuthService(authService, userRepository);
+        oauthService.registerProvider(new DiscordProvider("", ""));
+        server.setOAuthService(oauthService);
         server.setAuthService(new ImplAuthService(userRepository));
 
         // Start the server

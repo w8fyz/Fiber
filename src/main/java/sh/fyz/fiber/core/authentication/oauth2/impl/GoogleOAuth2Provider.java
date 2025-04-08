@@ -43,7 +43,7 @@ public class GoogleOAuth2Provider<T extends UserAuth> extends AbstractOAuth2Prov
     }
 
     @Override
-    public Map<String, Object> getUserInfo(String accessToken) {
+    public Map<String, String> getUserInfo(String accessToken) {
         return getUserInfoFromToken(accessToken);
     }
     

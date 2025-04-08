@@ -19,7 +19,7 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
     private final AuthenticationService<T> authenticationService;
     private final Map<String, OAuth2Provider<T>> providers;
     private final Map<String, String> stateStore;
-    private final GenericRepository<T> userRepository;
+    public final GenericRepository<T> userRepository;
 
     public OAuth2AuthenticationService(AuthenticationService<T> authenticationService, GenericRepository<T> userRepository) {
         this.authenticationService = authenticationService;
@@ -34,6 +34,15 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
      */
     public void registerProvider(OAuth2Provider<T> provider) {
         providers.put(provider.getProviderId(), provider);
+    }
+
+    /**
+     * Get the OAuth2 provider by ID
+     * @param providerId The provider ID
+     * @return The OAuth2 provider
+     */
+    public OAuth2Provider<T> getProvider(String providerId) {
+        return providers.get(providerId);
     }
 
     /**
@@ -79,7 +88,7 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         OAuth2TokenResponse tokenResponse = provider.getAccessToken(code, redirectUri);
         
         // Get user info
-        Map<String, Object> userInfo = provider.getUserInfo(tokenResponse.getAccessToken());
+        Map<String, String> userInfo = provider.getUserInfo(tokenResponse.getAccessToken());
         
         // Find or create user
         T user = findOrCreateUser(userInfo, provider);
@@ -96,5 +105,5 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
      * @param provider The OAuth2 provider
      * @return The user
      */
-    protected abstract T findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<T> provider);
+    protected abstract T findOrCreateUser(Map<String, String> userInfo, OAuth2Provider<T> provider);
 } 
