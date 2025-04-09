@@ -78,7 +78,7 @@ public class RouterServlet extends HttpServlet {
             RateLimitProcessor.onSuccess(method, parameters, req);
         } catch (Exception e) {
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resp.getWriter().write("Internal server error: " + e.getMessage());
+            resp.getOutputStream().write(("Internal server error: " + e.getMessage()).getBytes());
         }
     }
 } 

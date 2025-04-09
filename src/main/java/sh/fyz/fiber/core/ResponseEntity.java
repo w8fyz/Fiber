@@ -74,6 +74,8 @@ public class ResponseEntity<T> {
             if (contentType.equals("application/json")) {
                 ObjectMapper mapper = new ObjectMapper();
                 mapper.writeValue(response.getWriter(), body);
+            } else if (body instanceof byte[]) {
+                response.getOutputStream().write((byte[]) body);
             } else {
                 response.getWriter().write(body.toString());
             }
