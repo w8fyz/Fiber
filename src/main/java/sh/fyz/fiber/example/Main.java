@@ -29,17 +29,22 @@ public class Main {
         // Enable API documentation
         server.enableDocumentation();
         
-        // Register controllers
-        server.registerController(ExampleController.class);
-        server.registerController(AuthController.class);
+        // Initialize repositories and services
         userRepository = new UserRepository();
-
         ImplAuthService authService = new ImplAuthService(userRepository);
         OAuthService oauthService = new OAuthService(authService, userRepository);
-        oauthService.registerProvider(new DiscordProvider("", ""));
+        
+        // Register OAuth providers
+        oauthService.registerProvider(new DiscordProvider("882758522725613638", "WOjENOu6dJUef3_kNpKrcNxLg2CHvZac"));
+        
+        // Set services in the server
+        server.setAuthService(authService);
         server.setOAuthService(oauthService);
-        server.setAuthService(new ImplAuthService(userRepository));
-
+        
+        // Register controllers with dependencies
+        server.registerController(new ExampleController());
+        server.registerController(new AuthController(oauthService));
+        
         // Start the server
         server.start();
         

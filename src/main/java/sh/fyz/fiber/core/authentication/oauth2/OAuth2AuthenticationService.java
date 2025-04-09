@@ -11,7 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * OAuth2 authentication service that integrates with the existing AuthenticationService.
+ * Simplified OAuth2 authentication service.
  * 
  * @param <T> The type of user entity used in the application
  */
@@ -84,11 +84,8 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
             throw new IllegalArgumentException("Provider not found: " + providerId);
         }
 
-        // Exchange code for token
-        OAuth2TokenResponse tokenResponse = provider.getAccessToken(code, redirectUri);
-        
-        // Get user info
-        Map<String, String> userInfo = provider.getUserInfo(tokenResponse.getAccessToken());
+        // Process the callback and get user info
+        Map<String, Object> userInfo = provider.processCallback(code, redirectUri);
         
         // Find or create user
         T user = findOrCreateUser(userInfo, provider);
@@ -105,5 +102,5 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
      * @param provider The OAuth2 provider
      * @return The user
      */
-    protected abstract T findOrCreateUser(Map<String, String> userInfo, OAuth2Provider<T> provider);
+    protected abstract T findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<T> provider);
 } 

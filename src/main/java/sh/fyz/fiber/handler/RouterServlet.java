@@ -11,6 +11,7 @@ import sh.fyz.fiber.core.security.logging.AuditLogger;
 
 import java.lang.reflect.Method;
 import java.io.IOException;
+import java.util.Map;
 
 public class RouterServlet extends HttpServlet {
     private final EndpointRegistry endpointRegistry;
@@ -22,16 +23,39 @@ public class RouterServlet extends HttpServlet {
     @Override
     protected void service(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try {
-            // Find the matching endpoint
-            String key = req.getRequestURI() + ":" + req.getMethod();
-            EndpointHandler endpoint = endpointRegistry.getEndpoints().get(key);
-            if (endpoint == null) {
+            // Find the matching endpoint using pattern matching
+            String requestUri = req.getRequestURI();
+            String requestMethod = req.getMethod();
+            EndpointHandler matchedEndpoint = null;
+            
+            // Try to find a matching endpoint
+            for (Map.Entry<String, EndpointHandler> entry : endpointRegistry.getEndpoints().entrySet()) {
+                String key = entry.getKey();
+                EndpointHandler endpoint = entry.getValue();
+                
+                // Check if the HTTP method matches
+                if (!key.endsWith(":" + requestMethod)) {
+                    continue;
+                }
+                
+                // Extract the path pattern from the key
+                String pathPattern = key.substring(0, key.lastIndexOf(":"));
+                
+                // Check if the path matches the pattern
+                if (endpoint.matchesPath(requestUri)) {
+                    matchedEndpoint = endpoint;
+                    break;
+                }
+            }
+            
+            if (matchedEndpoint == null) {
+                System.out.println("No matching endpoint found for: " + requestUri + ":" + requestMethod);
                 resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
 
-            Method method = endpoint.getMethod();
-            Object[] parameters = endpoint.getParameters();
+            Method method = matchedEndpoint.getMethod();
+            Object[] parameters = matchedEndpoint.getParameters();
 
             // Check rate limit before processing
             Object rateLimitResult = RateLimitProcessor.process(method, parameters, req);
@@ -42,7 +66,7 @@ public class RouterServlet extends HttpServlet {
             }
 
             // Process the request
-            Object result = endpoint.handleRequest(req, resp);
+            Object result = matchedEndpoint.handleRequest(req, resp);
             
             // Log audit event if @AuditLog annotation is present
             AuditLog auditLog = method.getAnnotation(AuditLog.class);

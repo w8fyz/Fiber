@@ -21,9 +21,11 @@ import java.util.concurrent.TimeUnit;
 
 @Controller("/auth")
 public class AuthController {
-
     
-    public AuthController() {
+    private final OAuthService oauthService;
+    
+    public AuthController(OAuthService oauthService) {
+        this.oauthService = oauthService;
     }
 
     @RequestMapping(value = "/register", method = RequestMapping.Method.POST)
@@ -64,46 +66,38 @@ public class AuthController {
     public void oauthLogin(
             @PathVariable("provider") String provider,
             HttpServletRequest request,
-            HttpServletResponse response) {
-        OAuth2Provider<?> oauthProvider = FiberServer.get().getOAuthService().getProvider(provider);
+            HttpServletResponse response) throws IOException {
+        OAuth2Provider<User> oauthProvider = oauthService.getProvider(provider);
         if (oauthProvider != null) {
-            String redirectUrl = FiberServer.get().getOAuthService().getAuthorizationUrl(provider, request.getRequestURL().toString() + "/callback");
+            String requestUrl = request.getRequestURL().toString();
+            String callbackUrl = requestUrl.replace("/login", "/callback");
+            String redirectUrl = oauthService.getAuthorizationUrl(provider, callbackUrl);
             response.setHeader("Location", redirectUrl);
             response.setStatus(HttpServletResponse.SC_FOUND);
         } else {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Provider not found: " + provider);
         }
     }
 
-    @RequestMapping(value = "/oauth/{provider}/login/callback", method = RequestMapping.Method.GET)
+    @RequestMapping(value = "/oauth/{provider}/callback", method = RequestMapping.Method.GET)
     @AuditLog(action = "OAUTH_CALLBACK", logParameters = true)
-    public void oauthCallback(
+    public ResponseEntity<User> oauthCallback(
             @PathVariable("provider") String provider,
             @Param("code") String code,
             @Param("state") String state,
             HttpServletRequest request,
-            HttpServletResponse response) {
-        OAuth2Provider<User> oauthProvider = (OAuth2Provider<User>) FiberServer.get().getOAuthService().getProvider(provider);
-        if (oauthProvider != null) {
-            try {
-                User user = (User) FiberServer.get().getOAuthService().handleCallback(code, state, "", request, response);
-                if (user != null) {
-                    AuthenticationService<?> authService = FiberServer.get().getAuthService();
-                    authService.setAuthCookies(user, request, response);
-                    response.sendRedirect("/dashboard"); // Redirect to your app's dashboard
-                } else {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "OAuth authentication failed");
-                }
-            } catch (Exception e) {
-                try {
-                    response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "OAuth authentication error");
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
+            HttpServletResponse response) throws IOException {
+        try {
+            User user = oauthService.handleCallback(code, state, request.getRequestURL().toString(), request, response);
+            if (user != null) {
+                return ResponseEntity.ok(user);
+            } else {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "OAuth authentication failed");
             }
-        } else {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        } catch (Exception e) {
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "OAuth authentication error: " + e.getMessage());
         }
+        return null;
     }
 
     @RequestMapping(value = "/refresh", method = RequestMapping.Method.POST)

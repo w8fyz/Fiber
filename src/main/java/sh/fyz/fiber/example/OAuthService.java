@@ -6,7 +6,6 @@ import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
 
 import java.util.Map;
-import java.util.UUID;
 
 public class OAuthService extends OAuth2AuthenticationService<User> {
     public OAuthService(AuthenticationService<User> authenticationService, GenericRepository<User> userRepository) {
@@ -14,12 +13,12 @@ public class OAuthService extends OAuth2AuthenticationService<User> {
     }
 
     @Override
-    protected User findOrCreateUser(Map<String, String> userInfo, OAuth2Provider<User> provider) {
+    protected User findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<User> provider) {
         String providerId = provider.getProviderId();
         String externalId = (String) userInfo.get("id");
         
         // Try to find existing user by provider ID and external ID
-        User existingUser = userRepository.findByProviderIdAndExternalId(providerId, externalId);
+        User existingUser = ((UserRepository)userRepository).findByProviderIdAndExternalId(providerId, externalId);
         if (existingUser != null) {
             return existingUser;
         }

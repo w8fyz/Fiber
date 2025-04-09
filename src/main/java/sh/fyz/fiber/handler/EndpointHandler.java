@@ -121,6 +121,11 @@ public class EndpointHandler extends HttpServlet {
     }
 
     public Object handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        // Log request details
+        System.out.println("Handling request: " + req.getMethod() + " " + req.getRequestURI());
+        System.out.println("Path pattern: " + pathPattern.pattern());
+        System.out.println("Path variables: " + String.join(", ", pathVariableNames));
+
         // Check if method requires authentication (either through roles or @AuthenticatedUser)
         boolean requiresAuth = requiredRoles != null && requiredRoles.length > 0;
         for (Parameter parameter : method.getParameters()) {
@@ -156,16 +161,16 @@ public class EndpointHandler extends HttpServlet {
 
         // Execute global middleware
         for (Middleware middleware : globalMiddleware) {
-            if (!middleware.process(req, resp)) {
+            if (!middleware.handle(req, resp)) {
                 return null;
             }
         }
 
         // Extract path variables
         String path = req.getRequestURI();
-        Pattern pattern = Pattern.compile(pathPattern);
-        Matcher matcher = pattern.matcher(path);
+        Matcher matcher = pathPattern.matcher(path);
         if (!matcher.matches()) {
+            System.out.println("Path not found: " + path);
             ErrorResponse.send(resp, path, HttpServletResponse.SC_NOT_FOUND, "Path not found");
             return null;
         }
@@ -216,5 +221,25 @@ public class EndpointHandler extends HttpServlet {
 
     public Parameter[] getParameters() {
         return method.getParameters();
+    }
+    
+    /**
+     * Check if the given request URI matches the path pattern
+     * @param requestUri The request URI to check
+     * @return true if the URI matches the pattern, false otherwise
+     */
+    public boolean matchesPath(String requestUri) {
+        System.out.println("Checking if path matches: " + requestUri);
+        System.out.println("  Pattern: " + pathPattern.pattern());
+        Matcher matcher = pathPattern.matcher(requestUri);
+        boolean matches = matcher.matches();
+        System.out.println("  Matches: " + matches);
+        if (matches) {
+            // Log the captured path variables
+            for (String varName : pathVariableNames) {
+                System.out.println("  Path variable '" + varName + "': " + matcher.group(varName));
+            }
+        }
+        return matches;
     }
 } 

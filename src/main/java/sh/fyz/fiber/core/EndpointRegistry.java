@@ -40,15 +40,12 @@ public class EndpointRegistry {
             throw new RuntimeException("Failed to create controller instance", e);
         }
 
-        // Get all methods including inherited ones
-        for (Method method : controllerClass.getMethods()) {
-            // Only register methods that are declared in this class, not in superclasses
-            if (method.getDeclaringClass().equals(controllerClass)) {
-                RequestMapping mapping = method.getAnnotation(RequestMapping.class);
-                if (mapping != null) {
-                    String path = basePath + mapping.value();
-                    registerEndpoint(path, mapping.method(), method, controllerInstance);
-                }
+        // Get all methods declared in this class
+        for (Method method : controllerClass.getDeclaredMethods()) {
+            RequestMapping mapping = method.getAnnotation(RequestMapping.class);
+            if (mapping != null) {
+                String path = basePath + mapping.value();
+                registerEndpoint(path, mapping.method(), method, controllerInstance);
             }
         }
     }
@@ -61,9 +58,14 @@ public class EndpointRegistry {
         // Use a composite key of path and HTTP method
         String key = path + ":" + httpMethod;
         if (endpoints.containsKey(key)) {
+            System.out.println("Endpoint already registered: " + key);
             return; // Skip if endpoint is already registered
         }
         System.out.println("Registering endpoint: " + key);
+        System.out.println("  Controller: " + controllerInstance.getClass().getName());
+        System.out.println("  Method: " + method.getName());
+        System.out.println("  Path: " + path);
+        System.out.println("  HTTP Method: " + httpMethod);
         endpoints.put(key, new EndpointHandler(controllerInstance, method, globalMiddleware, requiredRoles));
     }
 

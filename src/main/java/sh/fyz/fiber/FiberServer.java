@@ -115,7 +115,7 @@ public class FiberServer {
         }
 
         // Register all endpoints in the controller
-        for (Method method : controllerClass.getMethods()) {
+        for (Method method : controllerClass.getDeclaredMethods()) {
             RequestMapping requestMapping = method.getAnnotation(RequestMapping.class);
             if (requestMapping != null) {
                 String path = requestMapping.value();

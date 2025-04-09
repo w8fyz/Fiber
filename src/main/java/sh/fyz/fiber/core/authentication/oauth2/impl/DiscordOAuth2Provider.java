@@ -2,7 +2,6 @@ package sh.fyz.fiber.core.authentication.oauth2.impl;
 
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.oauth2.AbstractOAuth2Provider;
-import sh.fyz.fiber.core.authentication.oauth2.OAuth2TokenResponse;
 
 import java.util.Map;
 
@@ -25,7 +24,7 @@ public class DiscordOAuth2Provider<T extends UserAuth> extends AbstractOAuth2Pro
      * @param clientSecret The Discord application client secret
      */
     public DiscordOAuth2Provider(String clientId, String clientSecret) {
-        super(clientId, clientSecret, AUTHORIZATION_ENDPOINT, TOKEN_ENDPOINT, USER_INFO_ENDPOINT);
+        super(clientId, clientSecret, AUTHORIZATION_ENDPOINT, TOKEN_ENDPOINT, USER_INFO_ENDPOINT, DEFAULT_SCOPE);
     }
 
     @Override
@@ -35,17 +34,13 @@ public class DiscordOAuth2Provider<T extends UserAuth> extends AbstractOAuth2Pro
 
     @Override
     public String getAuthorizationUrl(String state, String redirectUri) {
-        return buildAuthorizationUrl(state, redirectUri, DEFAULT_SCOPE);
+        return buildAuthorizationUrl(state, redirectUri, defaultScope);
     }
-
+    
     @Override
-    public OAuth2TokenResponse getAccessToken(String code, String redirectUri) {
-        return exchangeCodeForToken(code, redirectUri);
-    }
-
-    @Override
-    public Map<String, String> getUserInfo(String accessToken) {
-        return getUserInfoFromToken(accessToken);
+    protected void customizeAuthorizationParams(Map<String, String> params) {
+        // Discord-specific parameters
+        params.put("prompt", "consent"); // Always show the consent screen
     }
     
     @Override
