@@ -10,8 +10,6 @@ import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
-import sh.fyz.fiber.core.security.logging.AuditLogger;
-import sh.fyz.fiber.core.security.processors.RateLimitProcessor;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
 
 import java.io.IOException;
@@ -81,7 +79,7 @@ public class AuthController {
 
     @RequestMapping(value = "/oauth/{provider}/callback", method = RequestMapping.Method.GET)
     @AuditLog(action = "OAUTH_CALLBACK", logParameters = true)
-    public ResponseEntity<User> oauthCallback(
+    public ResponseEntity<Map<String, String>> oauthCallback(
             @PathVariable("provider") String provider,
             @Param("code") String code,
             @Param("state") String state,
@@ -90,7 +88,11 @@ public class AuthController {
         try {
             User user = oauthService.handleCallback(code, state, request.getRequestURL().toString(), request, response);
             if (user != null) {
-                return ResponseEntity.ok(user);
+                Map<String, String> tokens = new HashMap<>();
+                tokens.put("token_type", "Bearer");
+                tokens.put("expires_in", "3600");
+
+                return ResponseEntity.ok(tokens);
             } else {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "OAuth authentication failed");
             }

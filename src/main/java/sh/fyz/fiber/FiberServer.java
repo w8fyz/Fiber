@@ -149,7 +149,7 @@ public class FiberServer {
             for (Method method : DocumentationController.class.getDeclaredMethods()) {
                 switch (method.getName()) {
                     case "getApiDocs" -> apiMethod = method;
-                    case "getSwaggerUI" -> uiMethod = method;
+                    case "getUI" -> uiMethod = method;
                     case "getCSS" -> cssMethod = method;
                     case "getJavaScript" -> jsMethod = method;
                 }

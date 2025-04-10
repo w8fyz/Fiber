@@ -83,7 +83,7 @@ public class DocumentationController {
     }
 
     @RequestMapping(value = "/ui", method = RequestMapping.Method.GET)
-    public ResponseEntity<byte[]> getSwaggerUI(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public ResponseEntity<byte[]> getUI(HttpServletRequest request, HttpServletResponse response) throws IOException {
         System.out.println("Loading index.html...");
         byte[] content = readResource("docs/index.html");
         if (content != null) {
