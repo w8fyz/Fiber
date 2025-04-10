@@ -1,5 +1,6 @@
 package sh.fyz.fiber.core.authentication;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
@@ -8,19 +9,29 @@ import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 
 /**
- * Middleware for handling authentication using Bearer tokens.
+ * Middleware for handling authentication using cookies.
  */
 public class AuthMiddleware {
     private static final String USER_ID_ATTRIBUTE = "userId";
 
     public static boolean process(HttpServletRequest req, HttpServletResponse resp) {
-        String token = req.getHeader("Authorization");
-        if (token == null || !token.startsWith("Bearer ")) {
+        Cookie[] cookies = req.getCookies();
+        String token = null;
+        
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("access_token".equals(cookie.getName())) {
+                    token = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (token == null) {
             ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "No valid token provided");
             return false;
         }
 
-        token = token.substring(7); // Remove "Bearer " prefix
         try {
             if (!FiberServer.get().getAuthService().validateToken(token, req)) {
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Invalid token or browser mismatch");
@@ -28,11 +39,12 @@ public class AuthMiddleware {
             }
 
             // Extract user info from token
-            String userId = JwtUtil.extractId(token);
+            Object userId = JwtUtil.extractId(token);
             req.setAttribute(USER_ID_ATTRIBUTE, userId);
 
             return true;
         } catch (Exception e) {
+            e.printStackTrace();
             ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
             return false;
         }
@@ -41,7 +53,7 @@ public class AuthMiddleware {
      * Get the current user from the request attributes
      */
     public static UserAuth getCurrentUser(HttpServletRequest req) {
-        String userId = (String) req.getAttribute(USER_ID_ATTRIBUTE);
+        Object userId = req.getAttribute(USER_ID_ATTRIBUTE);
         if (userId == null) {
             return null;
         }

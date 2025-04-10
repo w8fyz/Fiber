@@ -15,6 +15,7 @@ import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 @Controller("/auth")
@@ -29,7 +30,17 @@ public class AuthController {
     @RequestMapping(value = "/register", method = RequestMapping.Method.POST)
     @AuditLog(action = "USER_REGISTRATION", logParameters = true, maskSensitiveData = true)
     public ResponseEntity<String> register(@RequestBody User user) {
-        Main.userRepository.save(user);
+        User creating = new User();
+        creating.setName(user.getName());
+        creating.setAge(user.getAge());
+        creating.setEmail(user.getEmail());
+        creating.setUsername(user.getUsername());
+        creating.setPassword(user.getPassword());
+        boolean exist = FiberServer.get().getAuthService().doesIdentifiersAlreadyExists(user);
+        if(exist) {
+            return ResponseEntity.badRequest("User with this identifier already exists");
+        }
+        Main.userRepository.save(creating);
         return ResponseEntity.ok("User registered successfully");
     }
 
@@ -114,7 +125,7 @@ public class AuthController {
         String userAgent = request.getHeader("User-Agent");
 
         if (JwtUtil.validateRefreshToken(refreshToken, ipAddress, userAgent)) {
-            String userId = JwtUtil.extractId(refreshToken);
+            Object userId = JwtUtil.extractId(refreshToken);
             UserAuth user = authService.getUserById(userId);
             
             if (user != null) {

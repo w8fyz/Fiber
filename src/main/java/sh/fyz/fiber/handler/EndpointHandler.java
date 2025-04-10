@@ -22,14 +22,17 @@ import sh.fyz.fiber.validation.ValidationResult;
 import sh.fyz.fiber.util.JsonUtil;
 import sh.fyz.fiber.handler.parameter.ParameterHandler;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
+import sh.fyz.fiber.core.authentication.RoleHierarchy;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.Set;
 
 public class EndpointHandler extends HttpServlet {
     private final Object controller;
@@ -143,14 +146,16 @@ public class EndpointHandler extends HttpServlet {
 
             // Check if user has required role
             if (requiredRoles != null && requiredRoles.length > 0) {
-                String userRole = AuthMiddleware.getCurrentUserRole(req);
-                boolean hasRequiredRole = false;
-                for (String role : requiredRoles) {
-                    if (role.equals(userRole)) {
-                        hasRequiredRole = true;
-                        break;
-                    }
+                UserAuth user = AuthMiddleware.getCurrentUser(req);
+                if (user == null) {
+                    ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
+                    return null;
                 }
+
+                Set<String> userRoles = user.getRoles();
+                RoleHierarchy roleHierarchy = FiberServer.get().getRoleHierarchy();
+                boolean hasRequiredRole = Arrays.stream(requiredRoles)
+                    .anyMatch(required -> roleHierarchy.hasRole(userRoles, required));
 
                 if (!hasRequiredRole) {
                     ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient permissions");
@@ -192,6 +197,7 @@ public class EndpointHandler extends HttpServlet {
                     if (e instanceof IllegalArgumentException) {
                         ErrorResponse.send(resp, path, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
                     } else {
+                        e.printStackTrace();
                         ErrorResponse.send(resp, path, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal server error");
                     }
                     return null;

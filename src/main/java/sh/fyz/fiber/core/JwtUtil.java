@@ -146,9 +146,9 @@ public class JwtUtil {
     /**
      * Extract the user ID from a token
      * @param token The token to extract the ID from
-     * @return The user ID
+     * @return The user ID as an Object (can be Integer or String)
      */
-    public static String extractId(String token) {
-        return extractAllClaims(token).get("id", String.class);
+    public static Object extractId(String token) {
+        return extractAllClaims(token).get("id");
     }
 } 

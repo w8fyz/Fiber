@@ -45,7 +45,7 @@ public class UserFieldUtil {
         return null;
     }
 
-    private static Map<String, Field> findIdentifierFields(Class<?> userClass) {
+    public static Map<String, Field> findIdentifierFields(Class<?> userClass) {
         Map<String, Field> identifiers = new HashMap<>();
         for (Field field : userClass.getDeclaredFields()) {
             if (field.isAnnotationPresent(IdentifierField.class)) {

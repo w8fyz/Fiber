@@ -20,21 +20,19 @@ public class OAuthService extends OAuth2AuthenticationService<User> {
         // Try to find existing user by provider ID and external ID
         User existingUser = ((UserRepository)userRepository).findByProviderIdAndExternalId(providerId, externalId);
         if (existingUser != null) {
+            // Update existing user information
+            provider.mapUserData(userInfo, existingUser);
+            existingUser = userRepository.save(existingUser);
             return existingUser;
         }
         
         // Create new user if not found
         User newUser = new User();
-        newUser.setUsername((String) userInfo.get("username"));
-        newUser.setEmail((String) userInfo.get("email"));
         newUser.setProviderId(providerId);
         newUser.setExternalId(externalId);
         
-        // Set additional fields based on provider
-        if (providerId.equals("discord")) {
-            newUser.setAvatar((String) userInfo.get("avatar"));
-            newUser.setDiscriminator((String) userInfo.get("discriminator"));
-        }
+        // Map user data from provider
+        provider.mapUserData(userInfo, newUser);
         
         // Save the new user
         userRepository.save(newUser);

@@ -48,6 +48,16 @@ public abstract class AuthenticationService<T extends UserAuth> {
         return UserFieldUtil.findUserByIdentifier(identifier, userRepository.all());
     }
 
+    public boolean doesIdentifiersAlreadyExists(UserAuth user) {
+        Map<String, String> identifiers = UserFieldUtil.getIdentifiers(user);
+        for(Map.Entry<String, String> entry : identifiers.entrySet()) {
+            if(findUserByIdentifer(entry.getValue()) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public String generateToken(UserAuth user, HttpServletRequest request) {
         String ipAddress = getClientIpAddress(request);
         String userAgent = request.getHeader("User-Agent");

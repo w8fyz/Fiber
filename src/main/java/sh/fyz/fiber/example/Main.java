@@ -12,13 +12,11 @@ public class Main {
     public static UserRepository userRepository;
     public static void main(String[] args) throws Exception {
 
-        Architect architect = new Architect().setRedisCredentials(
-                new RedisCredentials("host.docker.internal", "1234", 6379, 10, 10))
-                .setReceiver(true)
+        Architect architect = new Architect()
                 .setDatabaseCredentials(
                         new DatabaseCredentials(
                                 new PostgreSQLAuth(
-                                        "host.docker.internal",
+                                        "localhost",
                                         5432, "fiber"),
                                 "postgres" ,"75395185Aa===", 16));
         architect.start();
