@@ -40,11 +40,7 @@ public abstract class AuthenticationService<T extends UserAuth> {
         return userRepository.findById(id);
     }
 
-    public boolean validateCredentials(Object id, String password) {
-        T user = userRepository.findById(id);
-        if (user == null) {
-            return false;
-        }
+    public boolean validateCredentials(UserAuth user, String password) {
         return UserFieldUtil.validatePassword(user, password);
     }
 

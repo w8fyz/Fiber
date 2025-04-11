@@ -58,7 +58,7 @@ public class AuthController {
         AuthenticationService<?> authService = FiberServer.get().getAuthService();
         UserAuth user = authService.findUserByIdentifer(value);
         
-        if (user != null && authService.validateCredentials(user.getId(), password)) {
+        if (user != null && authService.validateCredentials(user, password)) {
             // Set auth cookies
             authService.setAuthCookies(user, request, response);
             
