@@ -20,12 +20,16 @@ public abstract class AuthenticationService<T extends UserAuth> {
     private static final int LOGIN_TIMEOUT_MINUTES = 15;
     private String refreshTokenPath = "/auth";
 
-    public AuthenticationService(GenericRepository<T> userRepository) {
-        this.userRepository = userRepository;
-    }
 
-    public void setRefreshTokenPath(String path) {
-        this.refreshTokenPath = path;
+
+    /*
+        * Constructor for AuthenticationService
+        * @param userRepository The repository for user data
+        * @param authEndpoint The generic endpoint for authentication, used to generate the refresh token path
+     */
+    public AuthenticationService(GenericRepository<T> userRepository, String authEndpoint) {
+        this.userRepository = userRepository;
+        this.refreshTokenPath = authEndpoint;
     }
 
     public Class<T> getUserClass() {
@@ -95,32 +99,6 @@ public abstract class AuthenticationService<T extends UserAuth> {
             "refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=" + refreshTokenPath + "; Max-Age=0");
     }
 
-    public boolean isLoginBlocked(String identifier) {
-        Integer attempts = loginAttempts.get(identifier);
-        Instant lastAttempt = lastLoginAttempt.get(identifier);
-        
-        if (attempts != null && attempts >= MAX_LOGIN_ATTEMPTS) {
-            if (lastAttempt != null && 
-                Instant.now().isBefore(lastAttempt.plusSeconds(LOGIN_TIMEOUT_MINUTES * 60))) {
-                return true;
-            } else {
-                // Reset attempts if timeout has passed
-                loginAttempts.remove(identifier);
-                lastLoginAttempt.remove(identifier);
-            }
-        }
-        return false;
-    }
-
-    public void recordFailedLoginAttempt(String identifier) {
-        loginAttempts.merge(identifier, 1, Integer::sum);
-        lastLoginAttempt.put(identifier, Instant.now());
-    }
-
-    public void resetLoginAttempts(String identifier) {
-        loginAttempts.remove(identifier);
-        lastLoginAttempt.remove(identifier);
-    }
 
     public String getClientIpAddress(HttpServletRequest request) {
         String ipAddress = request.getHeader("X-Forwarded-For");

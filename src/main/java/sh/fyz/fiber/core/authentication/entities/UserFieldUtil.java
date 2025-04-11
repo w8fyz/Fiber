@@ -2,6 +2,7 @@ package sh.fyz.fiber.core.authentication.entities;
 
 import sh.fyz.fiber.core.authentication.annotations.IdentifierField;
 import sh.fyz.fiber.core.authentication.annotations.PasswordField;
+import sh.fyz.fiber.core.security.BCryptUtil;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -90,8 +91,23 @@ public class UserFieldUtil {
         }
     }
 
+    public static void setPassword(UserAuth user, String password) {
+        try {
+            Field passwordField = passwordFields.get(user.getClass());
+            if (passwordField == null) {
+                validateUserClass(user.getClass());
+                passwordField = passwordFields.get(user.getClass());
+            }
+            String hashedPassword = BCryptUtil.hashPassword(password);
+            passwordField.set(user, hashedPassword);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException("Failed to set password", e);
+        }
+    }
+
     public static boolean validatePassword(UserAuth user, String password) {
-        return getPassword(user).equals(password);
+        String hashedPassword = getPassword(user);
+        return BCryptUtil.checkPassword(password, hashedPassword);
     }
 
     public static UserAuth findUserByIdentifier(String identifier, List<? extends UserAuth> users) {

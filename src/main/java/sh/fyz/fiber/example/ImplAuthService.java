@@ -6,6 +6,6 @@ import sh.fyz.fiber.core.authentication.AuthenticationService;
 public class ImplAuthService extends AuthenticationService<User> {
 
     public ImplAuthService(GenericRepository<User> userRepository) {
-        super(userRepository);
+        super(userRepository, "/auth/");
     }
 }

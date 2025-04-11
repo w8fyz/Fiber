@@ -1,5 +1,6 @@
 package sh.fyz.fiber.example;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
@@ -11,6 +12,7 @@ import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
+import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -35,7 +37,7 @@ public class AuthController {
         creating.setAge(user.getAge());
         creating.setEmail(user.getEmail());
         creating.setUsername(user.getUsername());
-        creating.setPassword(user.getPassword());
+        UserFieldUtil.setPassword(creating, user.getPassword());
         boolean exist = FiberServer.get().getAuthService().doesIdentifiersAlreadyExists(user);
         if(exist) {
             return ResponseEntity.badRequest("User with this identifier already exists");
@@ -116,13 +118,28 @@ public class AuthController {
     @RequestMapping(value = "/refresh", method = RequestMapping.Method.POST)
     @AuditLog(action = "TOKEN_REFRESH", logParameters = true, maskSensitiveData = true)
     public ResponseEntity<Map<String, String>> refreshToken(
-            @Param("refresh_token") String refreshToken, 
             HttpServletRequest request,
             HttpServletResponse response) {
         
         AuthenticationService<?> authService = FiberServer.get().getAuthService();
         String ipAddress = authService.getClientIpAddress(request);
         String userAgent = request.getHeader("User-Agent");
+
+        // Get refresh token from cookie
+        String refreshToken = null;
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("refresh_token".equals(cookie.getName())) {
+                    refreshToken = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (refreshToken == null) {
+            return ResponseEntity.unauthorized(Map.of("error", "No refresh token provided"));
+        }
 
         if (JwtUtil.validateRefreshToken(refreshToken, ipAddress, userAgent)) {
             Object userId = JwtUtil.extractId(refreshToken);
