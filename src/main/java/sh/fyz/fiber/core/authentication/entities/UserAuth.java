@@ -1,36 +1,25 @@
 package sh.fyz.fiber.core.authentication.entities;
 
-import java.util.Set;
-
 /**
- * Interface définissant les informations d'authentification de base d'un utilisateur.
- * Cette interface peut être étendue par votre classe User pour fournir des données supplémentaires.
+ * Interface defining basic authentication information for a user.
+ * This interface can be extended by your User class to provide additional data.
  */
 public interface UserAuth {
     /**
-     * Obtient l'identifiant unique de l'utilisateur
-     * @return L'ID de l'utilisateur
+     * Get the unique identifier of the user
+     * @return The user's ID
      */
     Object getId();
 
     /**
-     * Obtient le nom d'utilisateur
-     * @return Le nom d'utilisateur
+     * Get the username
+     * @return The username
      */
     String getUsername();
 
     /**
-     * Obtient les rôles de l'utilisateur
-     * @return L'ensemble des rôles de l'utilisateur
+     * Get the user's role identifier
+     * @return The role identifier
      */
-    Set<String> getRoles();
-
-    /**
-     * Vérifie si l'utilisateur a un rôle spécifique
-     * @param role Le rôle à vérifier
-     * @return true si l'utilisateur a le rôle
-     */
-    default boolean hasRole(String role) {
-        return getRoles().contains(role);
-    }
+    String getRole();
 } 

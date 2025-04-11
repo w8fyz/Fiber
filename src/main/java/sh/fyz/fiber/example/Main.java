@@ -1,11 +1,9 @@
 package sh.fyz.fiber.example;
 
 import sh.fyz.architect.Architect;
-import sh.fyz.architect.cache.RedisCredentials;
 import sh.fyz.architect.persistant.DatabaseCredentials;
 import sh.fyz.architect.persistant.sql.provider.PostgreSQLAuth;
 import sh.fyz.fiber.FiberServer;
-import sh.fyz.fiber.core.authentication.AuthenticationService;
 
 public class Main {
 
@@ -39,9 +37,15 @@ public class Main {
         server.setAuthService(authService);
         server.setOAuthService(oauthService);
         
+        // Initialize roles and permissions using class-based roles
+        server.getRoleRegistry().registerRoleClasses(
+            UserRole.class
+        );
+        
         // Register controllers with dependencies
         server.registerController(new ExampleController());
         server.registerController(new AuthController(oauthService));
+        server.registerController(new RoleExampleController());
         
         // Start the server
         server.start();

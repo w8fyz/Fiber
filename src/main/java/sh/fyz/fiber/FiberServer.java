@@ -11,6 +11,7 @@ import sh.fyz.fiber.core.authentication.AuthMiddleware;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
@@ -18,6 +19,7 @@ import sh.fyz.fiber.handler.RouterServlet;
 import sh.fyz.fiber.core.security.filters.SecurityHeadersFilter;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
+import sh.fyz.fiber.core.authentication.RoleRegistry;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -35,6 +37,8 @@ public class FiberServer {
     private final EndpointRegistry endpointRegistry;
     private final DocumentationController documentationController;
     private boolean documentationEnabled;
+    private final RoleRegistry roleRegistry;
+    private final ChallengeRegistry challengeRegistry;
 
     public FiberServer(int port) {
         instance = this;
@@ -44,6 +48,8 @@ public class FiberServer {
         this.endpointRegistry = new EndpointRegistry(globalMiddleware);
         this.documentationController = new DocumentationController();
         this.documentationEnabled = false;
+        this.roleRegistry = new RoleRegistry();
+        this.challengeRegistry = new ChallengeRegistry();
 
         // Initialize validation system
         ValidationInitializer.initialize();
@@ -85,6 +91,13 @@ public class FiberServer {
             throw new IllegalStateException("OAuth2AuthenticationService has not been set");
         }
         return oauthService;
+    }
+
+    /**
+     * Get the role registry for managing roles and permissions
+     */
+    public RoleRegistry getRoleRegistry() {
+        return roleRegistry;
     }
 
     /**

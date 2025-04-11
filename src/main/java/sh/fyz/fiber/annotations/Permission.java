@@ -6,15 +6,15 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Annotation to specify required roles for controllers and endpoints.
- * If not specified, no role is required.
+ * Annotation to specify required permissions for controllers and endpoints.
+ * If not specified, no specific permissions are required.
  */
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
-public @interface RequireRole {
+public @interface Permission {
     /**
-     * The roles required to access the controller or endpoint.
-     * If empty, no role is required.
+     * The permissions required to access the controller or endpoint.
+     * If empty, no specific permissions are required.
      */
     String[] value() default {};
 } 

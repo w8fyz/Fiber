@@ -12,6 +12,8 @@ import sh.fyz.fiber.annotations.PathVariable;
 import sh.fyz.fiber.annotations.RequestBody;
 import sh.fyz.fiber.annotations.RequestMapping;
 import sh.fyz.fiber.annotations.Controller;
+import sh.fyz.fiber.annotations.RequireRole;
+import sh.fyz.fiber.annotations.Permission;
 import sh.fyz.fiber.core.authentication.AuthMiddleware;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.ResponseEntity;
@@ -22,7 +24,8 @@ import sh.fyz.fiber.validation.ValidationResult;
 import sh.fyz.fiber.util.JsonUtil;
 import sh.fyz.fiber.handler.parameter.ParameterHandler;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
-import sh.fyz.fiber.core.authentication.RoleHierarchy;
+import sh.fyz.fiber.core.authentication.RoleRegistry;
+import sh.fyz.fiber.core.authentication.entities.Role;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -40,6 +43,7 @@ public class EndpointHandler extends HttpServlet {
     private final List<Middleware> globalMiddleware;
     private final ObjectMapper objectMapper;
     private final String[] requiredRoles;
+    private final String[] requiredPermissions;
     private final Pattern pathPattern;
     private String[] pathVariableNames;
 
@@ -49,6 +53,10 @@ public class EndpointHandler extends HttpServlet {
         this.globalMiddleware = globalMiddleware;
         this.objectMapper = new ObjectMapper();
         this.requiredRoles = requiredRoles;
+        
+        // Get required permissions from the Permission annotation
+        Permission permissionAnnotation = method.getAnnotation(Permission.class);
+        this.requiredPermissions = permissionAnnotation != null ? permissionAnnotation.value() : new String[0];
 
         // Extract path variables from the request mapping
         RequestMapping mapping = method.getAnnotation(RequestMapping.class);
@@ -125,12 +133,10 @@ public class EndpointHandler extends HttpServlet {
 
     public Object handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         // Log request details
-        System.out.println("Handling request: " + req.getMethod() + " " + req.getRequestURI());
-        System.out.println("Path pattern: " + pathPattern.pattern());
-        System.out.println("Path variables: " + String.join(", ", pathVariableNames));
 
-        // Check if method requires authentication (either through roles or @AuthenticatedUser)
-        boolean requiresAuth = requiredRoles != null && requiredRoles.length > 0;
+        // Check if method requires authentication (either through roles, permissions, or @AuthenticatedUser)
+        boolean requiresAuth = (requiredRoles != null && requiredRoles.length > 0) || 
+                              (requiredPermissions != null && requiredPermissions.length > 0);
         for (Parameter parameter : method.getParameters()) {
             if (parameter.isAnnotationPresent(AuthenticatedUser.class)) {
                 requiresAuth = true;
@@ -144,20 +150,38 @@ public class EndpointHandler extends HttpServlet {
                 return null;
             }
 
+            UserAuth user = AuthMiddleware.getCurrentUser(req);
+            if (user == null) {
+                ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
+                return null;
+            }
+
+            String userRole = user.getRole();
+            RoleRegistry roleRegistry = FiberServer.get().getRoleRegistry();
+            Role role = roleRegistry.getRole(userRole);
+            
+            if (role == null) {
+                ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "User has no valid role");
+                return null;
+            }
+            
             // Check if user has required role
             if (requiredRoles != null && requiredRoles.length > 0) {
-                UserAuth user = AuthMiddleware.getCurrentUser(req);
-                if (user == null) {
-                    ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
+                boolean hasRequiredRole = Arrays.stream(requiredRoles)
+                    .anyMatch(required -> role.getIdentifier().equals(required));
+                
+                if (!hasRequiredRole) {
+                    ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient role");
                     return null;
                 }
-
-                Set<String> userRoles = user.getRoles();
-                RoleHierarchy roleHierarchy = FiberServer.get().getRoleHierarchy();
-                boolean hasRequiredRole = Arrays.stream(requiredRoles)
-                    .anyMatch(required -> roleHierarchy.hasRole(userRoles, required));
-
-                if (!hasRequiredRole) {
+            }
+            
+            // Check if user has required permissions
+            if (requiredPermissions != null && requiredPermissions.length > 0) {
+                boolean hasRequiredPermissions = Arrays.stream(requiredPermissions)
+                    .allMatch(permission -> role.hasPermission(permission));
+                
+                if (!hasRequiredPermissions) {
                     ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient permissions");
                     return null;
                 }
@@ -217,6 +241,7 @@ public class EndpointHandler extends HttpServlet {
             
             return result;
         } catch (Exception e) {
+            e.printStackTrace();
             throw new ServletException("Failed to invoke endpoint method", e);
         }
     }
@@ -235,11 +260,8 @@ public class EndpointHandler extends HttpServlet {
      * @return true if the URI matches the pattern, false otherwise
      */
     public boolean matchesPath(String requestUri) {
-        System.out.println("Checking if path matches: " + requestUri);
-        System.out.println("  Pattern: " + pathPattern.pattern());
         Matcher matcher = pathPattern.matcher(requestUri);
         boolean matches = matcher.matches();
-        System.out.println("  Matches: " + matches);
         if (matches) {
             // Log the captured path variables
             for (String varName : pathVariableNames) {
