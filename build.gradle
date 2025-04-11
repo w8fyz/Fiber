@@ -26,6 +26,12 @@ dependencies {
     // Jackson for JSON serialization
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
     
+    // OpenID Connect dependencies
+    implementation 'com.nimbusds:oauth2-oidc-sdk:11.10.1'
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.37.3'
+    implementation 'com.nimbusds:lang-tag:1.7'
+    implementation 'net.minidev:json-smart:2.5.0'
+    
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
