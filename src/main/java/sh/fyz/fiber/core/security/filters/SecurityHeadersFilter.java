@@ -5,11 +5,20 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 public class SecurityHeadersFilter implements Filter {
+    private static String serverHeader = "Fiber";
+
+    public static void setServerHeader(String header) {
+        serverHeader = header;
+    }
+
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
         
         HttpServletResponse httpResponse = (HttpServletResponse) response;
+        
+        // Set server header
+        httpResponse.setHeader("Server", serverHeader);
         
         // Basic security headers
         httpResponse.setHeader("X-Content-Type-Options", "nosniff");

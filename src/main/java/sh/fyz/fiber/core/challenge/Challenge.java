@@ -1,5 +1,6 @@
 package sh.fyz.fiber.core.challenge;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
 
@@ -58,7 +59,7 @@ public interface Challenge {
     /**
      * Marks the challenge as failed
      */
-    void fail();
+    void fail() throws IOException;
 
     /**
      * Checks if the challenge has expired
@@ -70,7 +71,7 @@ public interface Challenge {
      * Sets the status of the challenge
      * @param status The new status to set
      */
-    void setStatus(ChallengeStatus status);
+    void setStatus(ChallengeStatus status) throws IOException;
 
     /**
      * @return The callback for this challenge, or null if none is set

@@ -1,5 +1,6 @@
 package sh.fyz.fiber.core.challenge;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -73,7 +74,7 @@ public abstract class AbstractChallenge implements Challenge {
     }
 
     @Override
-    public void fail() {
+    public void fail() throws IOException {
         this.status = ChallengeStatus.FAILED;
         if (callback != null) {
             callback.onFailure(this, "INVALID_RESPONSE");
@@ -86,7 +87,7 @@ public abstract class AbstractChallenge implements Challenge {
     }
 
     @Override
-    public void setStatus(ChallengeStatus status) {
+    public void setStatus(ChallengeStatus status) throws IOException {
         this.status = status;
         if (status == ChallengeStatus.EXPIRED && callback != null) {
             callback.onFailure(this, "EXPIRED");

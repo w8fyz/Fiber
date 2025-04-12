@@ -9,6 +9,8 @@ import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import sh.fyz.fiber.core.challenge.Challenge;
+import sh.fyz.fiber.core.challenge.ChallengeCallback;
 import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
@@ -49,7 +51,7 @@ public class AuthController {
     @RequestMapping(value = "/login", method = RequestMapping.Method.POST)
     @RateLimit(attempts = 5, timeout = 15, unit = TimeUnit.MINUTES)
     @AuditLog(action = "LOGIN_ATTEMPT", logParameters = true, maskSensitiveData = true)
-    public ResponseEntity<Map<String, String>> login(
+    public ResponseEntity<Object> login(
             @Param("value") String value, 
             @Param("password") String password, 
             HttpServletRequest request,
@@ -60,13 +62,19 @@ public class AuthController {
         
         if (user != null && authService.validateCredentials(user, password)) {
             // Set auth cookies
-            authService.setAuthCookies(user, request, response);
-            
-            Map<String, String> tokens = new HashMap<>();
-            tokens.put("token_type", "Bearer");
-            tokens.put("expires_in", "3600");
-            
-            return ResponseEntity.ok(tokens);
+
+            Challenge challenge = FiberServer.get().getChallengeRegistry().createChallenge("CACA", Map.of("userId", user.getId()), new ChallengeCallback() {
+                @Override
+                public void onSuccess(Challenge challenge) {
+                    authService.setAuthCookies(user, request, response);
+                }
+
+                @Override
+                public void onFailure(Challenge challenge, String reason) throws IOException {
+                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "Challenge failed: " + reason);
+                }
+            });
+            return ResponseEntity.ok(challenge);
         }
         
         return ResponseEntity.unauthorized(Map.of("error", "Invalid credentials"));

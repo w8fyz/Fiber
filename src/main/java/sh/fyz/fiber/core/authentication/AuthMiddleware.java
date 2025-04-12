@@ -66,20 +66,4 @@ public class AuthMiddleware {
     public static Object getCurrentUserId(HttpServletRequest req) {
         return req.getAttribute(USER_ID_ATTRIBUTE);
     }
-
-    /**
-     * Get the current username from the request attributes
-     */
-    public static String getCurrentUsername(HttpServletRequest req) {
-        UserAuth userAuth = getCurrentUser(req);
-        return userAuth != null ? userAuth.getUsername() : null;
-    }
-
-    /**
-     * Get the current user role from the request attributes
-     */
-    public static String getCurrentUserRole(HttpServletRequest req) {
-        UserAuth userAuth = getCurrentUser(req);
-        return userAuth != null ? userAuth.getRole() : null;
-    }
 } 

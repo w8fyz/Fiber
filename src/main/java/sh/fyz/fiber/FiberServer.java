@@ -1,7 +1,9 @@
 package sh.fyz.fiber;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import sh.fyz.fiber.annotations.AuthenticatedUser;
@@ -13,6 +15,7 @@ import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.docs.DocumentationController;
+import sh.fyz.fiber.handler.FiberErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
 import sh.fyz.fiber.handler.RouterServlet;
@@ -21,6 +24,7 @@ import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 import sh.fyz.fiber.core.authentication.RoleRegistry;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
@@ -62,6 +66,9 @@ public class FiberServer {
         
         // Register security filter
         context.addFilter(SecurityHeadersFilter.class, "/*", null);
+
+        // Set custom server header
+        setServerHeader("Fiber");
     }
 
     public static FiberServer get() {
@@ -81,7 +88,11 @@ public class FiberServer {
         }
         return authService;
     }
-    
+
+    public ChallengeRegistry getChallengeRegistry() {
+        return challengeRegistry;
+    }
+
     public void setOAuthService(OAuth2AuthenticationService<?> oauthService) {
         this.oauthService = oauthService;
     }
@@ -186,11 +197,19 @@ public class FiberServer {
         }
     }
 
+    /**
+     * Set the server header that will be sent in HTTP responses
+     * @param header The server header value to use
+     */
+    public void setServerHeader(String header) {
+        sh.fyz.fiber.core.security.filters.SecurityHeadersFilter.setServerHeader(header);
+    }
+
     public void start() throws Exception {
         // Create a single servlet to handle all endpoints
         ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry));
         context.addServlet(holder, "/*");
-        
+        context.setErrorHandler(new FiberErrorHandler());
         server.start();
     }
 

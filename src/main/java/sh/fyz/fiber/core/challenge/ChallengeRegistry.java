@@ -4,6 +4,7 @@ import sh.fyz.fiber.core.challenge.impl.CaptchaChallenge;
 import sh.fyz.fiber.core.challenge.impl.EmailVerificationChallenge;
 import sh.fyz.fiber.core.challenge.impl.TwoFactorChallenge;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
@@ -88,14 +89,22 @@ public class ChallengeRegistry {
         return getChallenge(challengeId)
                 .map(challenge -> {
                     if (challenge.isExpired()) {
-                        challenge.setStatus(ChallengeStatus.EXPIRED);
+                        try {
+                            challenge.setStatus(ChallengeStatus.EXPIRED);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
                         return false;
                     }
                     boolean isValid = challenge.validateResponse(response);
                     if (isValid) {
                         challenge.complete();
                     } else {
-                        challenge.fail();
+                        try {
+                            challenge.fail();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
                     }
                     return isValid;
                 })
