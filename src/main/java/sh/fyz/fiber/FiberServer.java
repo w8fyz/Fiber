@@ -1,19 +1,14 @@
 package sh.fyz.fiber;
 
-import jakarta.servlet.http.HttpServletRequest;
-import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-import sh.fyz.fiber.annotations.AuthenticatedUser;
-import sh.fyz.fiber.annotations.Controller;
-import sh.fyz.fiber.annotations.RequestMapping;
-import sh.fyz.fiber.core.authentication.AuthMiddleware;
+import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
-import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
+import sh.fyz.fiber.core.challenge.internal.ChallengeController;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.handler.FiberErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
@@ -24,9 +19,7 @@ import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 import sh.fyz.fiber.core.authentication.RoleRegistry;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,6 +38,10 @@ public class FiberServer {
     private final ChallengeRegistry challengeRegistry;
 
     public FiberServer(int port) {
+        this(port, false);
+    }
+
+    public FiberServer(int port, boolean enableDocumentation) {
         instance = this;
         this.server = new Server(port);
         this.context = new ServletContextHandler(ServletContextHandler.SESSIONS);
@@ -67,8 +64,9 @@ public class FiberServer {
         // Register security filter
         context.addFilter(SecurityHeadersFilter.class, "/*", null);
 
-        // Set custom server header
-        setServerHeader("Fiber");
+        if (enableDocumentation) enableDocumentation();
+
+        registerController(new ChallengeController());
     }
 
     public static FiberServer get() {
@@ -160,7 +158,7 @@ public class FiberServer {
         globalMiddleware.add(middleware);
     }
 
-    public void enableDocumentation() {
+    private void enableDocumentation() {
         if (!documentationEnabled) {
             documentationEnabled = true;
             

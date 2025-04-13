@@ -1,7 +1,7 @@
 package sh.fyz.fiber.core.authentication.entities;
 
-import sh.fyz.fiber.core.authentication.annotations.IdentifierField;
-import sh.fyz.fiber.core.authentication.annotations.PasswordField;
+import sh.fyz.fiber.annotations.auth.IdentifierField;
+import sh.fyz.fiber.annotations.auth.PasswordField;
 import sh.fyz.fiber.core.security.BCryptUtil;
 
 import java.lang.reflect.Field;

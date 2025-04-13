@@ -2,11 +2,9 @@ package sh.fyz.fiber.core.security.processors;
 
 import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.interceptors.RateLimitInterceptor;
-import sh.fyz.fiber.annotations.RequestMapping;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
-import sh.fyz.fiber.core.authentication.annotations.IdentifierField;
-import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
+import sh.fyz.fiber.annotations.auth.IdentifierField;
 import sh.fyz.fiber.FiberServer;
 
 import java.lang.reflect.Method;

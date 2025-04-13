@@ -1,16 +1,12 @@
 package sh.fyz.fiber.example;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import sh.fyz.fiber.annotations.Controller;
-import sh.fyz.fiber.annotations.Param;
-import sh.fyz.fiber.annotations.RequestBody;
-import sh.fyz.fiber.annotations.RequestMapping;
+import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.params.Param;
+import sh.fyz.fiber.annotations.params.RequestBody;
+import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.ResponseEntity;
-import sh.fyz.fiber.validation.Email;
 import sh.fyz.fiber.validation.Min;
 import sh.fyz.fiber.validation.NotBlank;
-import sh.fyz.fiber.validation.NotNull;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -4,7 +4,12 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
-import sh.fyz.fiber.annotations.*;
+import sh.fyz.fiber.annotations.params.AuthenticatedUser;
+import sh.fyz.fiber.annotations.params.Param;
+import sh.fyz.fiber.annotations.params.PathVariable;
+import sh.fyz.fiber.annotations.params.RequestBody;
+import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.JwtUtil;
@@ -19,7 +24,6 @@ import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 @Controller("/auth")
@@ -52,7 +56,7 @@ public class AuthController {
     @RateLimit(attempts = 5, timeout = 15, unit = TimeUnit.MINUTES)
     @AuditLog(action = "LOGIN_ATTEMPT", logParameters = true, maskSensitiveData = true)
     public ResponseEntity<Object> login(
-            @Param("value") String value, 
+            @Param("value") String value,
             @Param("password") String password, 
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -65,16 +69,17 @@ public class AuthController {
 
             Challenge challenge = FiberServer.get().getChallengeRegistry().createChallenge("CACA", Map.of("userId", user.getId()), new ChallengeCallback() {
                 @Override
-                public void onSuccess(Challenge challenge) {
+                public ResponseEntity<Object> onSuccess(Challenge challenge, HttpServletRequest request, HttpServletResponse response) {
                     authService.setAuthCookies(user, request, response);
+                    return ResponseEntity.ok("Login successful");
                 }
 
                 @Override
-                public void onFailure(Challenge challenge, String reason) throws IOException {
-                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "Challenge failed: " + reason);
+                public ResponseEntity<Object> onFailure(Challenge challenge, String reason, HttpServletRequest request, HttpServletResponse response) {
+                    return ResponseEntity.unauthorized("Challenge failed: " + reason);
                 }
             });
-            return ResponseEntity.ok(challenge);
+            return ResponseEntity.ok(challenge.asDTO());
         }
         
         return ResponseEntity.unauthorized(Map.of("error", "Invalid credentials"));

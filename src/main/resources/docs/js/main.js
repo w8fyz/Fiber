@@ -123,6 +123,25 @@ function createEndpointCard(endpoint) {
         detailsSection.appendChild(description);
     }
 
+    // Path Variables
+    if (endpoint.pathVariables && endpoint.pathVariables.length > 0) {
+        const pathVarsSection = document.createElement('div');
+        pathVarsSection.className = 'path-variables';
+        pathVarsSection.innerHTML = '<h3>Path Variables</h3>';
+        
+        endpoint.pathVariables.forEach(pathVar => {
+            const pathVarRow = document.createElement('div');
+            pathVarRow.className = 'path-variable';
+            
+            pathVarRow.innerHTML = `
+                <span class="path-variable-name">${pathVar.name}</span>
+                <span class="path-variable-type">${pathVar.type}</span>
+            `;
+            pathVarsSection.appendChild(pathVarRow);
+        });
+        detailsSection.appendChild(pathVarsSection);
+    }
+
     // Parameters
     if (endpoint.parameters && endpoint.parameters.length > 0) {
         const paramsSection = document.createElement('div');
@@ -217,8 +236,32 @@ function openTestModal(endpoint) {
     testBodyInput.value = '';
     testResponse.textContent = '';
 
+    // Add path variable inputs
+    if (endpoint.pathVariables && endpoint.pathVariables.length > 0) {
+        const pathVarsSection = document.createElement('div');
+        pathVarsSection.className = 'form-group';
+        pathVarsSection.innerHTML = '<h3>Path Variables</h3>';
+        
+        endpoint.pathVariables.forEach(pathVar => {
+            const pathVarGroup = document.createElement('div');
+            pathVarGroup.className = 'form-group';
+            
+            pathVarGroup.innerHTML = `
+                <label>${pathVar.name} (${pathVar.type}) *</label>
+                <input type="text" name="path_${pathVar.name}" placeholder="Enter ${pathVar.name} value">
+            `;
+            pathVarsSection.appendChild(pathVarGroup);
+        });
+        
+        testParams.appendChild(pathVarsSection);
+    }
+
     // Add parameter inputs
     if (endpoint.parameters && endpoint.parameters.length > 0) {
+        const paramsSection = document.createElement('div');
+        paramsSection.className = 'form-group';
+        paramsSection.innerHTML = '<h3>Query Parameters</h3>';
+        
         endpoint.parameters.forEach(param => {
             const paramGroup = document.createElement('div');
             paramGroup.className = 'form-group';
@@ -231,8 +274,10 @@ function openTestModal(endpoint) {
                 <label>${param.name} (${param.type})${required}</label>
                 <input type="text" name="${param.name}" placeholder="${validationMessages || ''}">
             `;
-            testParams.appendChild(paramGroup);
+            paramsSection.appendChild(paramGroup);
         });
+        
+        testParams.appendChild(paramsSection);
     }
 
     // Show request body for POST/PUT methods
@@ -372,78 +417,186 @@ copyResponse.addEventListener('click', () => {
 // Update sendTest function to include headers and bearer token
 async function sendTestRequest() {
     if (!currentEndpoint) return;
-
-    const headers = {
-        'Content-Type': 'application/json'
-    };
-
-    // Add bearer token if enabled
-    if (tokenEnabled.checked && bearerToken.value) {
-        headers['Authorization'] = `Bearer ${bearerToken.value}`;
+    
+    const method = currentEndpoint.method;
+    let path = currentEndpoint.path;
+    
+    // Get path variables
+    const pathVarInputs = document.querySelectorAll('input[name^="path_"]');
+    pathVarInputs.forEach(input => {
+        const pathVarName = input.name.substring(5); // Remove 'path_' prefix
+        const pathVarValue = input.value.trim();
+        if (pathVarValue) {
+            path = path.replace(`{${pathVarName}}`, pathVarValue);
+        }
+    });
+    
+    // Get query parameters
+    const params = {};
+    const paramInputs = document.querySelectorAll('input[name]:not([name^="path_"])');
+    paramInputs.forEach(input => {
+        const value = input.value.trim();
+        if (value) {
+            params[input.name] = value;
+        }
+    });
+    
+    // Build URL with query parameters
+    let url = path;
+    if (Object.keys(params).length > 0) {
+        const queryString = new URLSearchParams(params).toString();
+        url += `?${queryString}`;
     }
-
-    // Add custom headers
-    requestHeaders.querySelectorAll('.header-row').forEach(row => {
-        const key = row.querySelector('.header-key').value;
-        const value = row.querySelector('.header-value').value;
+    
+    // Get request body
+    let body = null;
+    if (testBody.style.display !== 'none' && testBodyInput.value.trim()) {
+        try {
+            body = JSON.parse(testBodyInput.value);
+        } catch (e) {
+            testResponse.textContent = 'Invalid JSON in request body';
+            return;
+        }
+    }
+    
+    // Get headers
+    const headers = {};
+    const headerRows = document.querySelectorAll('.header-row');
+    headerRows.forEach(row => {
+        const key = row.querySelector('.header-key').value.trim();
+        const value = row.querySelector('.header-value').value.trim();
         if (key && value) {
             headers[key] = value;
         }
     });
-
-    // Build URL with parameters
-    let url = currentEndpoint.path;
-    const params = new URLSearchParams();
-    testParams.querySelectorAll('input').forEach(input => {
-        if (input.value) {
-            params.append(input.name, input.value);
-        }
-    });
-    if (params.toString()) {
-        url += '?' + params.toString();
-    }
-
-    const startTime = performance.now();
-    const responseContainer = document.querySelector('.test-response');
     
+    // Add authorization header if enabled
+    const tokenEnabled = document.getElementById('tokenEnabled').checked;
+    const bearerToken = document.getElementById('bearerToken').value.trim();
+    if (tokenEnabled && bearerToken) {
+        headers['Authorization'] = `Bearer ${bearerToken}`;
+    }
+    
+    // Add content-type header for POST/PUT requests with body
+    if (body && (method === 'POST' || method === 'PUT')) {
+        headers['Content-Type'] = 'application/json';
+    }
+    
+    // Add credentials to include cookies
+    const credentials = 'include';
+    
+    // Send request
+    const startTime = performance.now();
     try {
         const response = await fetch(url, {
-            method: currentEndpoint.method,
-            headers: headers,
-            body: testBody.style.display !== 'none' ? testBodyInput.value : undefined
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : null,
+            credentials,
+            redirect: 'manual' // Don't follow redirects automatically
         });
-
+        
         const endTime = performance.now();
         const responseTime = Math.round(endTime - startTime);
-        const responseData = await response.json();
-
-        // Create response HTML with syntax highlighting
-        const responseHtml = `
-            <div class="response-info">
-                <span class="response-status ${response.ok ? 'success' : 'error'}">${response.status} ${response.statusText}</span>
-                <span class="response-time">${responseTime}ms</span>
-            </div>
-            <div class="response-controls">
-                <button class="btn btn-secondary" onclick="copyResponse()">
-                    <i class="fas fa-copy"></i> Copy
-                </button>
-            </div>
-            <div class="example">
-                <pre>${syntaxHighlightJson(JSON.stringify(responseData, null, 2))}</pre>
-            </div>
-        `;
         
-        responseContainer.innerHTML = responseHtml;
+        // Check if this is a redirect response
+        if (response.status >= 300 && response.status < 400) {
+            const location = response.headers.get('Location');
+            if (location) {
+                displayRedirectResponse(response, responseTime, location);
+                return;
+            }
+        }
+        
+        const responseData = await response.text();
+        let formattedResponse;
+        
+        try {
+            // Try to parse as JSON
+            const jsonResponse = JSON.parse(responseData);
+            formattedResponse = JSON.stringify(jsonResponse, null, 2);
+        } catch (e) {
+            // If not JSON, just use the text
+            formattedResponse = responseData;
+        }
+        
+        displayTestResponse(formattedResponse, response.status, responseTime);
+        
+        // Reload cookies after request
+        loadCookies();
     } catch (error) {
-        responseContainer.innerHTML = `
-            <div class="response-info">
-                <span class="response-status error">Error</span>
-            </div>
-            <div class="example">
-                <pre class="error">${error.message}</pre>
-            </div>
-        `;
+        const endTime = performance.now();
+        const responseTime = Math.round(endTime - startTime);
+        displayTestResponse(`Error: ${error.message}`, 0, responseTime);
     }
+}
+
+// Display redirect response with iframe
+function displayRedirectResponse(response, responseTime, location) {
+    const responseContainer = document.querySelector('.test-response');
+    const statusClass = 'redirect';
+    
+    // Create a container for the redirect information and iframe
+    const redirectContainer = document.createElement('div');
+    redirectContainer.className = 'redirect-container';
+    
+    // Add redirect information
+    const redirectInfo = document.createElement('div');
+    redirectInfo.className = 'redirect-info';
+    redirectInfo.innerHTML = `
+        <div class="response-info">
+            <span class="response-status ${statusClass}">${response.status} Redirect</span>
+            <span class="response-time">${responseTime}ms</span>
+        </div>
+        <div class="redirect-location">
+            <strong>Redirecting to:</strong> <a href="${location}" target="_blank">${location}</a>
+        </div>
+    `;
+    
+    // Create iframe container
+    const iframeContainer = document.createElement('div');
+    iframeContainer.className = 'iframe-container';
+    
+    // Create iframe
+    const iframe = document.createElement('iframe');
+    iframe.src = location;
+    iframe.className = 'redirect-iframe';
+    iframe.title = 'Redirect Preview';
+    
+    // Add controls for the iframe
+    const iframeControls = document.createElement('div');
+    iframeControls.className = 'iframe-controls';
+    iframeControls.innerHTML = `
+        <button class="btn btn-secondary open-in-new-tab">
+            <i class="fas fa-external-link-alt"></i> Open in New Tab
+        </button>
+        <button class="btn btn-secondary reload-iframe">
+            <i class="fas fa-sync-alt"></i> Reload
+        </button>
+    `;
+    
+    // Add event listeners for the controls
+    iframeControls.querySelector('.open-in-new-tab').addEventListener('click', () => {
+        window.open(location, '_blank');
+    });
+    
+    iframeControls.querySelector('.reload-iframe').addEventListener('click', () => {
+        iframe.src = iframe.src;
+    });
+    
+    // Assemble the redirect container
+    iframeContainer.appendChild(iframe);
+    iframeContainer.appendChild(iframeControls);
+    
+    redirectContainer.appendChild(redirectInfo);
+    redirectContainer.appendChild(iframeContainer);
+    
+    // Clear previous content and add the redirect container
+    responseContainer.innerHTML = '';
+    responseContainer.appendChild(redirectContainer);
+    
+    // Reload cookies after request
+    loadCookies();
 }
 
 // Update event listener
@@ -549,4 +702,138 @@ function addExpandCollapseAll() {
     
     // Insert the button before the container
     container.parentNode.insertBefore(toggleButton, container);
+}
+
+// Cookie management
+const cookiesModal = document.getElementById('cookiesModal');
+const cookiesToggle = document.getElementById('cookiesToggle');
+const cookiesList = document.querySelector('.cookies-list');
+const addCookieBtn = document.getElementById('addCookie');
+const cookieNameInput = document.getElementById('cookieName');
+const cookieValueInput = document.getElementById('cookieValue');
+const cookieDomainInput = document.getElementById('cookieDomain');
+const cookiePathInput = document.getElementById('cookiePath');
+const cookieExpiresInput = document.getElementById('cookieExpires');
+const cookieSecureInput = document.getElementById('cookieSecure');
+const cookieHttpOnlyInput = document.getElementById('cookieHttpOnly');
+const cookieSameSiteInput = document.getElementById('cookieSameSite');
+
+// Open cookies modal
+cookiesToggle.addEventListener('click', () => {
+    cookiesModal.style.display = 'block';
+    loadCookies();
+});
+
+// Close cookies modal
+cookiesModal.querySelector('.close').addEventListener('click', () => {
+    cookiesModal.style.display = 'none';
+});
+
+// Close modal when clicking outside
+window.addEventListener('click', (event) => {
+    if (event.target === cookiesModal) {
+        cookiesModal.style.display = 'none';
+    }
+});
+
+// Load and display cookies
+function loadCookies() {
+    cookiesList.innerHTML = '';
+    const cookies = document.cookie.split(';');
+    
+    if (cookies.length === 1 && cookies[0] === '') {
+        cookiesList.innerHTML = '<p class="no-cookies">No cookies found</p>';
+        return;
+    }
+    
+    cookies.forEach(cookie => {
+        if (cookie.trim() === '') return;
+        
+        const [name, value] = cookie.split('=').map(part => part.trim());
+        const cookieItem = document.createElement('div');
+        cookieItem.className = 'cookie-item';
+        
+        cookieItem.innerHTML = `
+            <div class="cookie-info">
+                <span class="cookie-name">${name}</span>
+                <span class="cookie-value">${value}</span>
+            </div>
+            <div class="cookie-actions">
+                <button class="btn btn-icon delete-cookie" data-name="${name}">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        cookiesList.appendChild(cookieItem);
+    });
+    
+    // Add event listeners to delete buttons
+    document.querySelectorAll('.delete-cookie').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const name = e.currentTarget.getAttribute('data-name');
+            deleteCookie(name);
+        });
+    });
+}
+
+// Add a new cookie
+addCookieBtn.addEventListener('click', () => {
+    const name = cookieNameInput.value.trim();
+    const value = cookieValueInput.value.trim();
+    
+    if (!name || !value) {
+        alert('Cookie name and value are required');
+        return;
+    }
+    
+    let cookieString = `${name}=${value}`;
+    
+    // Add optional attributes
+    if (cookieDomainInput.value.trim()) {
+        cookieString += `; domain=${cookieDomainInput.value.trim()}`;
+    }
+    
+    if (cookiePathInput.value.trim()) {
+        cookieString += `; path=${cookiePathInput.value.trim()}`;
+    }
+    
+    if (cookieExpiresInput.value) {
+        const date = new Date(cookieExpiresInput.value);
+        cookieString += `; expires=${date.toUTCString()}`;
+    }
+    
+    if (cookieSecureInput.checked) {
+        cookieString += '; secure';
+    }
+    
+    if (cookieHttpOnlyInput.checked) {
+        cookieString += '; HttpOnly';
+    }
+    
+    if (cookieSameSiteInput.checked) {
+        cookieString += '; SameSite=Strict';
+    }
+    
+    // Set the cookie
+    document.cookie = cookieString;
+    
+    // Reload cookies
+    loadCookies();
+    
+    // Reset form
+    cookieNameInput.value = '';
+    cookieValueInput.value = '';
+    cookieDomainInput.value = '';
+    cookiePathInput.value = '/';
+    cookieExpiresInput.value = '';
+    cookieSecureInput.checked = false;
+    cookieHttpOnlyInput.checked = false;
+    cookieSameSiteInput.checked = false;
+});
+
+// Delete a cookie
+function deleteCookie(name) {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+    loadCookies();
 } 

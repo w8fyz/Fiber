@@ -16,7 +16,7 @@ public class FiberErrorHandler extends ErrorHandler {
                        HttpServletRequest request, HttpServletResponse response)
             throws IOException {
         int status = response.getStatus();
-        response.setStatus(status); // keep original status
+        response.setStatus(status);
         response.setContentType("application/json");
 
         String message = (String) request.getAttribute("jakarta.servlet.error.message");

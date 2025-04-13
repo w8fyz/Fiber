@@ -1,5 +1,8 @@
 package sh.fyz.fiber.core.challenge;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.challenge.impl.CaptchaChallenge;
 import sh.fyz.fiber.core.challenge.impl.EmailVerificationChallenge;
 import sh.fyz.fiber.core.challenge.impl.TwoFactorChallenge;
@@ -85,30 +88,34 @@ public class ChallengeRegistry {
      * @param response The response to validate
      * @return true if the response is valid, false otherwise
      */
-    public boolean validateChallenge(String challengeId, Object response) {
+    public ResponseEntity<Object> validateChallenge(String challengeId, Object response, HttpServletRequest request, HttpServletResponse httpResponse) {
         return getChallenge(challengeId)
                 .map(challenge -> {
+                    System.out.println("|---> Challenge ID: " + challengeId);
                     if (challenge.isExpired()) {
+                        System.out.println("|---> Challenge expired");
                         try {
-                            challenge.setStatus(ChallengeStatus.EXPIRED);
+                            challenge.setStatus(ChallengeStatus.EXPIRED, request, httpResponse);
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
-                        return false;
+                        return null;
                     }
                     boolean isValid = challenge.validateResponse(response);
                     if (isValid) {
-                        challenge.complete();
+                        System.out.println("|---> Challenge completed");
+                        return challenge.complete(request, httpResponse);
                     } else {
                         try {
-                            challenge.fail();
+                            System.out.println("|---> Challenge failed");
+                            return challenge.fail(request, httpResponse);
                         } catch (IOException e) {
-                            throw new RuntimeException(e);
+                            e.printStackTrace();
                         }
                     }
-                    return isValid;
+                    return null;
                 })
-                .orElse(false);
+                .orElse(null);
     }
 
     /**

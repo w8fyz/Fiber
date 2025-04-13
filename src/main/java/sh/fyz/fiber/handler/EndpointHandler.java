@@ -1,26 +1,19 @@
 package sh.fyz.fiber.handler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
-import sh.fyz.fiber.annotations.AuthenticatedUser;
-import sh.fyz.fiber.annotations.Param;
-import sh.fyz.fiber.annotations.PathVariable;
-import sh.fyz.fiber.annotations.RequestBody;
-import sh.fyz.fiber.annotations.RequestMapping;
-import sh.fyz.fiber.annotations.Controller;
-import sh.fyz.fiber.annotations.RequireRole;
-import sh.fyz.fiber.annotations.Permission;
+import sh.fyz.fiber.annotations.params.AuthenticatedUser;
+import sh.fyz.fiber.annotations.request.RequestMapping;
+import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.security.Permission;
 import sh.fyz.fiber.core.authentication.AuthMiddleware;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.middleware.Middleware;
-import sh.fyz.fiber.validation.ValidationRegistry;
-import sh.fyz.fiber.validation.ValidationResult;
 import sh.fyz.fiber.util.JsonUtil;
 import sh.fyz.fiber.handler.parameter.ParameterHandler;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
@@ -34,14 +27,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.Set;
 
 public class EndpointHandler extends HttpServlet {
     private final Object controller;
     private final Method method;
     private final List<Middleware> globalMiddleware;
-    private final ObjectMapper objectMapper;
     private final String[] requiredRoles;
     private final String[] requiredPermissions;
     private final Pattern pathPattern;
@@ -51,7 +41,6 @@ public class EndpointHandler extends HttpServlet {
         this.controller = controller;
         this.method = method;
         this.globalMiddleware = globalMiddleware;
-        this.objectMapper = new ObjectMapper();
         this.requiredRoles = requiredRoles;
         
         // Get required permissions from the Permission annotation
@@ -233,7 +222,7 @@ public class EndpointHandler extends HttpServlet {
             
             // Handle the response
             if (result instanceof ResponseEntity) {
-                ((ResponseEntity<?>) result).write(resp);
+                ((ResponseEntity<?>) result).write(req, resp);
             } else {
                 resp.setContentType("application/json");
                 resp.getWriter().write(JsonUtil.toJson(result));

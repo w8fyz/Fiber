@@ -60,7 +60,7 @@ public class RouterServlet extends HttpServlet {
             Object rateLimitResult = RateLimitProcessor.process(method, parameters, req);
             if (rateLimitResult != null) {
                 ResponseEntity<?> response = (ResponseEntity<?>) rateLimitResult;
-                response.write(resp);
+                response.write(req, resp);
                 return;
             }
 

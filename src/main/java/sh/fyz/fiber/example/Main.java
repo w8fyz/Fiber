@@ -22,10 +22,7 @@ public class Main {
         architect.start();
 
         // Create server
-        FiberServer server = new FiberServer(8080);
-        
-        // Enable API documentation
-        server.enableDocumentation();
+        FiberServer server = new FiberServer(8080, true);
         
         // Initialize repositories and services
         userRepository = new UserRepository();

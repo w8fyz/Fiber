@@ -1,6 +1,9 @@
 package sh.fyz.fiber.docs;
 
-import sh.fyz.fiber.annotations.RequestMapping;
+import sh.fyz.fiber.annotations.request.RequestMapping;
+import sh.fyz.fiber.annotations.params.Param;
+import sh.fyz.fiber.annotations.params.RequestBody;
+import sh.fyz.fiber.annotations.params.PathVariable;
 import sh.fyz.fiber.core.ResponseEntity;
 
 import java.lang.reflect.Method;
@@ -16,17 +19,20 @@ public class EndpointDoc {
     private final RequestMapping.Method method;
     private final String description;
     private final List<ParameterDoc> parameters;
+    private final List<PathVariableDoc> pathVariables;
     private final Class<?> requestBodyType;
     private final Class<?> responseType;
     private final Object requestBodyExample;
     private final Object responseExample;
 
     public EndpointDoc(String path, RequestMapping.Method method, String description,
-                       List<ParameterDoc> parameters, Class<?> requestBodyType, Class<?> responseType) {
+                       List<ParameterDoc> parameters, List<PathVariableDoc> pathVariables,
+                       Class<?> requestBodyType, Class<?> responseType) {
         this.path = path;
         this.method = method;
         this.description = description;
         this.parameters = parameters;
+        this.pathVariables = pathVariables;
         this.requestBodyType = requestBodyType;
         this.responseType = responseType;
         this.requestBodyExample = requestBodyType != null ? generateExample(requestBodyType) : null;
@@ -86,21 +92,28 @@ public class EndpointDoc {
     }
 
     public static EndpointDoc fromMethod(Method method, String basePath) {
-        String path = basePath + method.getAnnotation(sh.fyz.fiber.annotations.RequestMapping.class).value();
-        RequestMapping.Method httpMethod = method.getAnnotation(sh.fyz.fiber.annotations.RequestMapping.class).method();
+        String path = basePath + method.getAnnotation(RequestMapping.class).value();
+        RequestMapping.Method httpMethod = method.getAnnotation(RequestMapping.class).method();
         List<ParameterDoc> parameters = new ArrayList<>();
+        List<PathVariableDoc> pathVariables = new ArrayList<>();
         Class<?> requestBodyType = null;
 
         for (Parameter param : method.getParameters()) {
-            if (param.isAnnotationPresent(sh.fyz.fiber.annotations.RequestBody.class)) {
+            if (param.isAnnotationPresent(RequestBody.class)) {
                 requestBodyType = param.getType();
-            } else if (param.isAnnotationPresent(sh.fyz.fiber.annotations.Param.class)) {
-                sh.fyz.fiber.annotations.Param paramAnnotation = param.getAnnotation(sh.fyz.fiber.annotations.Param.class);
+            } else if (param.isAnnotationPresent(Param.class)) {
+                Param paramAnnotation = param.getAnnotation(Param.class);
                 parameters.add(new ParameterDoc(
                     paramAnnotation.value(),
                     param.getType().getSimpleName(),
                     paramAnnotation.required(),
                     getValidationMessages(param)
+                ));
+            } else if (param.isAnnotationPresent(PathVariable.class)) {
+                PathVariable pathVarAnnotation = param.getAnnotation(PathVariable.class);
+                pathVariables.add(new PathVariableDoc(
+                    pathVarAnnotation.value(),
+                    param.getType().getSimpleName()
                 ));
             }
         }
@@ -110,6 +123,7 @@ public class EndpointDoc {
             httpMethod,
             getMethodDescription(method),
             parameters,
+            pathVariables,
             requestBodyType,
             method.getReturnType()
         );
@@ -143,6 +157,7 @@ public class EndpointDoc {
     public RequestMapping.Method getMethod() { return method; }
     public String getDescription() { return description; }
     public List<ParameterDoc> getParameters() { return parameters; }
+    public List<PathVariableDoc> getPathVariables() { return pathVariables; }
     public Class<?> getRequestBodyType() { return requestBodyType; }
     public Class<?> getResponseType() { return responseType; }
     public Object getRequestBodyExample() { return requestBodyExample; }
@@ -166,5 +181,19 @@ public class EndpointDoc {
         public String getType() { return type; }
         public boolean isRequired() { return required; }
         public List<String> getValidationMessages() { return validationMessages; }
+    }
+
+    public static class PathVariableDoc {
+        private final String name;
+        private final String type;
+
+        public PathVariableDoc(String name, String type) {
+            this.name = name;
+            this.type = type;
+        }
+
+        // Getters
+        public String getName() { return name; }
+        public String getType() { return type; }
     }
 } 

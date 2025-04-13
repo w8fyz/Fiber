@@ -8,7 +8,7 @@ import java.util.Map;
 
 public class ExampleChallenge extends AbstractChallenge {
 
-    protected ExampleChallenge(String userId) {
+    protected ExampleChallenge(Object userId) {
         super("CACA", userId, Instant.now().plusSeconds(2 * 3600));
     }
 
@@ -19,7 +19,7 @@ public class ExampleChallenge extends AbstractChallenge {
     }
 
     public static Challenge create(Map<String, Object> params) {
-        String userId = (String) params.get("userId");
+        Object userId = params.get("userId");
         if (userId == null) {
             throw new IllegalArgumentException("userId is required for 2FA challenge");
         }
