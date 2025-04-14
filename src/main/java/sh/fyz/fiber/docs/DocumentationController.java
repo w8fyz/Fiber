@@ -1,12 +1,10 @@
 package sh.fyz.fiber.docs;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import sh.fyz.fiber.annotations.Controller;
-import sh.fyz.fiber.annotations.RequestMapping;
+import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.ResponseEntity;
-import sh.fyz.fiber.core.ErrorResponse;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,12 +16,10 @@ import java.util.Map;
 
 @Controller("/docs")
 public class DocumentationController {
-    private final ObjectMapper objectMapper;
     private final List<EndpointDoc> endpoints;
     private final Map<String, String> mimeTypes;
 
     public DocumentationController() {
-        this.objectMapper = new ObjectMapper();
         this.endpoints = new ArrayList<>();
         this.mimeTypes = new HashMap<>();
         mimeTypes.put("html", "text/html");
@@ -64,6 +60,16 @@ public class DocumentationController {
                 parameters.add(paramMap);
             }
             formattedEndpoint.put("parameters", parameters);
+            
+            // Add path variables
+            List<Map<String, Object>> pathVariables = new ArrayList<>();
+            for (EndpointDoc.PathVariableDoc pathVar : endpoint.getPathVariables()) {
+                Map<String, Object> pathVarMap = new HashMap<>();
+                pathVarMap.put("name", pathVar.getName());
+                pathVarMap.put("type", pathVar.getType());
+                pathVariables.add(pathVarMap);
+            }
+            formattedEndpoint.put("pathVariables", pathVariables);
             
             // Add request body type if present
             if (endpoint.getRequestBodyType() != null) {

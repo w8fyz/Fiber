@@ -4,11 +4,18 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
-import sh.fyz.fiber.annotations.*;
+import sh.fyz.fiber.annotations.params.AuthenticatedUser;
+import sh.fyz.fiber.annotations.params.Param;
+import sh.fyz.fiber.annotations.params.PathVariable;
+import sh.fyz.fiber.annotations.params.RequestBody;
+import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import sh.fyz.fiber.core.challenge.Challenge;
+import sh.fyz.fiber.core.challenge.ChallengeCallback;
 import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
@@ -17,7 +24,6 @@ import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 @Controller("/auth")
@@ -49,8 +55,8 @@ public class AuthController {
     @RequestMapping(value = "/login", method = RequestMapping.Method.POST)
     @RateLimit(attempts = 5, timeout = 15, unit = TimeUnit.MINUTES)
     @AuditLog(action = "LOGIN_ATTEMPT", logParameters = true, maskSensitiveData = true)
-    public ResponseEntity<Map<String, String>> login(
-            @Param("value") String value, 
+    public ResponseEntity<Object> login(
+            @Param("value") String value,
             @Param("password") String password, 
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -60,13 +66,20 @@ public class AuthController {
         
         if (user != null && authService.validateCredentials(user, password)) {
             // Set auth cookies
-            authService.setAuthCookies(user, request, response);
-            
-            Map<String, String> tokens = new HashMap<>();
-            tokens.put("token_type", "Bearer");
-            tokens.put("expires_in", "3600");
-            
-            return ResponseEntity.ok(tokens);
+
+            Challenge challenge = FiberServer.get().getChallengeRegistry().createChallenge("CACA", Map.of("userId", user.getId()), new ChallengeCallback() {
+                @Override
+                public ResponseEntity<Object> onSuccess(Challenge challenge, HttpServletRequest request, HttpServletResponse response) {
+                    authService.setAuthCookies(user, request, response);
+                    return ResponseEntity.ok("Login successful");
+                }
+
+                @Override
+                public ResponseEntity<Object> onFailure(Challenge challenge, String reason, HttpServletRequest request, HttpServletResponse response) {
+                    return ResponseEntity.unauthorized("Challenge failed: " + reason);
+                }
+            });
+            return ResponseEntity.ok(challenge.asDTO());
         }
         
         return ResponseEntity.unauthorized(Map.of("error", "Invalid credentials"));

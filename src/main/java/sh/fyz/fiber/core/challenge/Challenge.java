@@ -1,5 +1,12 @@
 package sh.fyz.fiber.core.challenge;
 
+import com.fasterxml.jackson.databind.util.JSONPObject;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.core.ResponseEntity;
+import sh.fyz.fiber.core.dto.DTOConvertible;
+
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
 
@@ -21,7 +28,7 @@ public interface Challenge {
     /**
      * @return The user ID this challenge is associated with
      */
-    String getUserId();
+    Object getUserId();
 
     /**
      * @return The timestamp when this challenge was created
@@ -53,12 +60,12 @@ public interface Challenge {
     /**
      * Marks the challenge as completed
      */
-    void complete();
+    ResponseEntity<Object> complete(HttpServletRequest request, HttpServletResponse response);
 
     /**
      * Marks the challenge as failed
      */
-    void fail();
+    ResponseEntity<Object> fail(HttpServletRequest request, HttpServletResponse response) throws IOException;
 
     /**
      * Checks if the challenge has expired
@@ -70,7 +77,7 @@ public interface Challenge {
      * Sets the status of the challenge
      * @param status The new status to set
      */
-    void setStatus(ChallengeStatus status);
+    void setStatus(ChallengeStatus status, HttpServletRequest request, HttpServletResponse response) throws IOException;
 
     /**
      * @return The callback for this challenge, or null if none is set
@@ -82,4 +89,6 @@ public interface Challenge {
      * @param callback The callback to set
      */
     void setCallback(ChallengeCallback callback);
+
+    Map<String, Object> asDTO();
 } 

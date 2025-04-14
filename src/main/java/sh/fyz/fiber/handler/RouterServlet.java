@@ -49,7 +49,6 @@ public class RouterServlet extends HttpServlet {
             }
             
             if (matchedEndpoint == null) {
-                System.out.println("No matching endpoint found for: " + requestUri + ":" + requestMethod);
                 resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
@@ -61,7 +60,7 @@ public class RouterServlet extends HttpServlet {
             Object rateLimitResult = RateLimitProcessor.process(method, parameters, req);
             if (rateLimitResult != null) {
                 ResponseEntity<?> response = (ResponseEntity<?>) rateLimitResult;
-                response.write(resp);
+                response.write(req, resp);
                 return;
             }
 

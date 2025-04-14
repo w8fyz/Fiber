@@ -1,13 +1,14 @@
-package sh.fyz.fiber.annotations;
+package sh.fyz.fiber.annotations.dto;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Target(ElementType.PARAMETER)
+/**
+ * Annotation to mark fields that should be ignored when converting to DTO
+ */
+@Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Param {
-    String value();
-    boolean required() default true;
+public @interface IgnoreDTO {
 } 

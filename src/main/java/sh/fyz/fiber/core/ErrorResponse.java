@@ -2,6 +2,7 @@ package sh.fyz.fiber.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.util.FiberObjectMapper;
 
 import java.io.IOException;
 
@@ -9,7 +10,7 @@ public class ErrorResponse {
     private final String uri;
     private final int status;
     private final String message;
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final FiberObjectMapper objectMapper = new FiberObjectMapper();
 
     public ErrorResponse(String uri, int status, String message) {
         this.uri = uri;

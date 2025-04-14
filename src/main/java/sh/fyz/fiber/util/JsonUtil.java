@@ -1,12 +1,10 @@
 package sh.fyz.fiber.util;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
  * Classe utilitaire pour la gestion du JSON.
  */
 public class JsonUtil {
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final FiberObjectMapper objectMapper = new FiberObjectMapper();
 
     /**
      * Convertit un objet en chaîne JSON.

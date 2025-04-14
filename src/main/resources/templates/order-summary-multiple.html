@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Order Summary</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .footer {
+            font-size: 12px;
+            color: #777;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+            margin-top: 30px;
+        }
+        .order-table, .shipping-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .order-table th, .order-table td, .shipping-table th, .shipping-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .order-table th, .shipping-table th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        .order-table tr:hover, .shipping-table tr:hover {
+            background-color: #f9f9f9;
+        }
+        .total-row {
+            font-weight: bold;
+            background-color: #f5f5f5;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Order Summary</h1>
+    </div>
+    
+    <div class="content">
+        <p>Hello {USER_NAME},</p>
+        
+        <p>Thank you for your order. Here's a summary of your purchase:</p>
+        
+        <p><strong>Order ID:</strong> {ORDER_ID}</p>
+        
+        <div class="section">
+            <h2 class="section-title">Order Details</h2>
+            {ORDER_ITEMS}
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Shipping Options</h2>
+            {SHIPPING_OPTIONS}
+        </div>
+        
+        <p>If you have any questions about your order, please contact our customer service team.</p>
+        
+        <p>Thank you for shopping with us!</p>
+    </div>
+    
+    <div class="footer">
+        <p>This email was sent to you because you made a purchase with our service.</p>
+        <p>If you did not make this purchase, please contact our support team immediately.</p>
+    </div>
+</body>
+</html> 

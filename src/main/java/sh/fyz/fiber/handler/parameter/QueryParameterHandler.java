@@ -2,7 +2,7 @@ package sh.fyz.fiber.handler.parameter;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import sh.fyz.fiber.annotations.Param;
+import sh.fyz.fiber.annotations.params.Param;
 import sh.fyz.fiber.validation.ValidationRegistry;
 import sh.fyz.fiber.validation.ValidationResult;
 

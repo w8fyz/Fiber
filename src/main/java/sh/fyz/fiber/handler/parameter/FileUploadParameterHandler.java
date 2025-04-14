@@ -3,7 +3,7 @@ package sh.fyz.fiber.handler.parameter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.Part;
-import sh.fyz.fiber.annotations.FileUpload;
+import sh.fyz.fiber.annotations.params.FileUpload;
 import sh.fyz.fiber.core.upload.FileUploadManager;
 import sh.fyz.fiber.core.upload.UploadedFile;
 

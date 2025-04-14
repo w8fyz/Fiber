@@ -1,4 +1,4 @@
-package sh.fyz.fiber.annotations;
+package sh.fyz.fiber.annotations.request;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

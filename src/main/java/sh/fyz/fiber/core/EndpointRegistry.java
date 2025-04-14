@@ -1,8 +1,8 @@
 package sh.fyz.fiber.core;
 
-import sh.fyz.fiber.annotations.Controller;
-import sh.fyz.fiber.annotations.RequireRole;
-import sh.fyz.fiber.annotations.RequestMapping;
+import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.security.RequireRole;
+import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.handler.EndpointHandler;
 import sh.fyz.fiber.middleware.Middleware;
 

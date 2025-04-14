@@ -1,9 +1,12 @@
 package sh.fyz.fiber.core.challenge;
 
-import sh.fyz.fiber.core.challenge.impl.CaptchaChallenge;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.challenge.impl.EmailVerificationChallenge;
 import sh.fyz.fiber.core.challenge.impl.TwoFactorChallenge;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
@@ -20,11 +23,6 @@ public class ChallengeRegistry {
     public ChallengeRegistry() {
         this.challengeCreators = new ConcurrentHashMap<>();
         this.activeChallenges = new ConcurrentHashMap<>();
-        
-        // Register built-in challenge types
-        registerChallengeType("2FA", TwoFactorChallenge::create);
-        registerChallengeType("EMAIL_VERIFICATION", EmailVerificationChallenge::create);
-        registerChallengeType("CAPTCHA", CaptchaChallenge::create);
     }
 
     /**
@@ -84,22 +82,34 @@ public class ChallengeRegistry {
      * @param response The response to validate
      * @return true if the response is valid, false otherwise
      */
-    public boolean validateChallenge(String challengeId, Object response) {
+    public ResponseEntity<Object> validateChallenge(String challengeId, Object response, HttpServletRequest request, HttpServletResponse httpResponse) {
         return getChallenge(challengeId)
                 .map(challenge -> {
+                    System.out.println("|---> Challenge ID: " + challengeId);
                     if (challenge.isExpired()) {
-                        challenge.setStatus(ChallengeStatus.EXPIRED);
-                        return false;
+                        System.out.println("|---> Challenge expired");
+                        try {
+                            challenge.setStatus(ChallengeStatus.EXPIRED, request, httpResponse);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                        return null;
                     }
                     boolean isValid = challenge.validateResponse(response);
                     if (isValid) {
-                        challenge.complete();
+                        System.out.println("|---> Challenge completed");
+                        return challenge.complete(request, httpResponse);
                     } else {
-                        challenge.fail();
+                        try {
+                            System.out.println("|---> Challenge failed");
+                            return challenge.fail(request, httpResponse);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                     }
-                    return isValid;
+                    return null;
                 })
-                .orElse(false);
+                .orElse(null);
     }
 
     /**

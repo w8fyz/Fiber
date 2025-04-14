@@ -3,7 +3,7 @@ package sh.fyz.fiber.handler.parameter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
-import sh.fyz.fiber.annotations.AuthenticatedUser;
+import sh.fyz.fiber.annotations.params.AuthenticatedUser;
 import sh.fyz.fiber.core.authentication.AuthMiddleware;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 

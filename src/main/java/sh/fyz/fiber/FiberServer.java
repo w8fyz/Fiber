@@ -1,18 +1,17 @@
 package sh.fyz.fiber;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-import sh.fyz.fiber.annotations.AuthenticatedUser;
-import sh.fyz.fiber.annotations.Controller;
-import sh.fyz.fiber.annotations.RequestMapping;
-import sh.fyz.fiber.core.authentication.AuthMiddleware;
+import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
-import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
+import sh.fyz.fiber.core.challenge.internal.ChallengeController;
+import sh.fyz.fiber.core.email.EmailService;
 import sh.fyz.fiber.docs.DocumentationController;
+import sh.fyz.fiber.handler.FiberErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
 import sh.fyz.fiber.handler.RouterServlet;
@@ -22,7 +21,6 @@ import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 import sh.fyz.fiber.core.authentication.RoleRegistry;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,6 +28,7 @@ public class FiberServer {
 
     private AuthenticationService<?> authService;
     private OAuth2AuthenticationService<?> oauthService;
+    private EmailService emailService;
     private static FiberServer instance;
     private final Server server;
     private final ServletContextHandler context;
@@ -41,6 +40,10 @@ public class FiberServer {
     private final ChallengeRegistry challengeRegistry;
 
     public FiberServer(int port) {
+        this(port, false);
+    }
+
+    public FiberServer(int port, boolean enableDocumentation) {
         instance = this;
         this.server = new Server(port);
         this.context = new ServletContextHandler(ServletContextHandler.SESSIONS);
@@ -62,6 +65,10 @@ public class FiberServer {
         
         // Register security filter
         context.addFilter(SecurityHeadersFilter.class, "/*", null);
+
+        if (enableDocumentation) enableDocumentation();
+
+        registerController(new ChallengeController());
     }
 
     public static FiberServer get() {
@@ -81,7 +88,11 @@ public class FiberServer {
         }
         return authService;
     }
-    
+
+    public ChallengeRegistry getChallengeRegistry() {
+        return challengeRegistry;
+    }
+
     public void setOAuthService(OAuth2AuthenticationService<?> oauthService) {
         this.oauthService = oauthService;
     }
@@ -149,7 +160,7 @@ public class FiberServer {
         globalMiddleware.add(middleware);
     }
 
-    public void enableDocumentation() {
+    private void enableDocumentation() {
         if (!documentationEnabled) {
             documentationEnabled = true;
             
@@ -186,15 +197,31 @@ public class FiberServer {
         }
     }
 
+    /**
+     * Set the server header that will be sent in HTTP responses
+     * @param header The server header value to use
+     */
+    public void setServerHeader(String header) {
+        sh.fyz.fiber.core.security.filters.SecurityHeadersFilter.setServerHeader(header);
+    }
+
     public void start() throws Exception {
         // Create a single servlet to handle all endpoints
         ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry));
         context.addServlet(holder, "/*");
-        
+        context.setErrorHandler(new FiberErrorHandler());
         server.start();
     }
 
     public void stop() throws Exception {
         server.stop();
+    }
+
+    public void setEmailService(EmailService emailService) {
+        this.emailService = emailService;
+    }
+
+    public EmailService getEmailService() {
+        return emailService;
     }
 } 

@@ -1,5 +1,12 @@
 package sh.fyz.fiber.core.challenge;
 
+import com.fasterxml.jackson.databind.util.JSONPObject;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.core.ResponseEntity;
+import sh.fyz.fiber.core.dto.DTOConvertible;
+
+import java.io.IOException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -9,17 +16,17 @@ import java.util.UUID;
  * Abstract base class for challenges that implements common functionality.
  * Specific challenge types should extend this class.
  */
-public abstract class AbstractChallenge implements Challenge {
+public abstract class AbstractChallenge extends DTOConvertible implements Challenge {
     private final String id;
     private final String type;
-    private final String userId;
+    private final Object userId;
     private final Instant createdAt;
     private final Instant expiresAt;
     private ChallengeStatus status;
     private final Map<String, Object> metadata;
     private ChallengeCallback callback;
 
-    protected AbstractChallenge(String type, String userId, Instant expiresAt) {
+    protected AbstractChallenge(String type, Object userId, Instant expiresAt) {
         this.id = UUID.randomUUID().toString();
         this.type = type;
         this.userId = userId;
@@ -40,7 +47,7 @@ public abstract class AbstractChallenge implements Challenge {
     }
 
     @Override
-    public String getUserId() {
+    public Object getUserId() {
         return userId;
     }
 
@@ -65,19 +72,21 @@ public abstract class AbstractChallenge implements Challenge {
     }
 
     @Override
-    public void complete() {
+    public ResponseEntity<Object> complete(HttpServletRequest request, HttpServletResponse response) {
         this.status = ChallengeStatus.COMPLETED;
         if (callback != null) {
-            callback.onSuccess(this);
+            return callback.onSuccess(this, request, response);
         }
+        return null;
     }
 
     @Override
-    public void fail() {
+    public ResponseEntity<Object> fail(HttpServletRequest request, HttpServletResponse response) throws IOException {
         this.status = ChallengeStatus.FAILED;
         if (callback != null) {
-            callback.onFailure(this, "INVALID_RESPONSE");
+            return callback.onFailure(this, "INVALID_RESPONSE", request, response);
         }
+        return null;
     }
 
     @Override
@@ -86,10 +95,10 @@ public abstract class AbstractChallenge implements Challenge {
     }
 
     @Override
-    public void setStatus(ChallengeStatus status) {
+    public void setStatus(ChallengeStatus status, HttpServletRequest request, HttpServletResponse response) throws IOException {
         this.status = status;
         if (status == ChallengeStatus.EXPIRED && callback != null) {
-            callback.onFailure(this, "EXPIRED");
+            callback.onFailure(this, "EXPIRED", request, response);
         }
     }
 
@@ -106,4 +115,4 @@ public abstract class AbstractChallenge implements Challenge {
     protected void addMetadata(String key, Object value) {
         this.metadata.put(key, value);
     }
-} 
+}

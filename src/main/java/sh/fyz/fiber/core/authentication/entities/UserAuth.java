@@ -12,12 +12,6 @@ public interface UserAuth {
     Object getId();
 
     /**
-     * Get the username
-     * @return The username
-     */
-    String getUsername();
-
-    /**
      * Get the user's role identifier
      * @return The role identifier
      */

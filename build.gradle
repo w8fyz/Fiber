@@ -25,6 +25,11 @@ dependencies {
     
     // Jackson for JSON serialization
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.2'
+    // Mail
+    implementation 'jakarta.mail:jakarta.mail-api:2.1.2'
+    implementation 'org.eclipse.angus:jakarta.mail:2.0.2'
+    implementation 'org.jsoup:jsoup:1.15.3'
     
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
