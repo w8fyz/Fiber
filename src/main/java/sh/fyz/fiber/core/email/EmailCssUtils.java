@@ -29,12 +29,8 @@ public class EmailCssUtils {
             // Extract CSS from style tag
             String cssContent = extractCssFromStyleTag(htmlContent);
             if (cssContent == null || cssContent.isEmpty()) {
-                LOGGER.warning("No CSS found in style tag");
                 return htmlContent;
             }
-            
-            LOGGER.info("CSS content extracted (first 200 chars): " + 
-                    (cssContent.length() > 200 ? cssContent.substring(0, 200) + "..." : cssContent));
             
             // Parse CSS rules
             Map<String, Map<String, String>> cssRules = parseCssRules(cssContent);
@@ -45,31 +41,31 @@ public class EmailCssUtils {
             // Remove the style tag
             result = removeStyleTag(result);
             
-            LOGGER.info("CSS conversion result (first 200 chars): " + 
-                    (result.length() > 200 ? result.substring(0, 200) + "..." : result));
-            
             return result;
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error converting CSS to inline styles: " + e.getMessage(), e);
+            e.printStackTrace();
             return htmlContent;
         }
     }
     
     /**
-     * Extracts CSS content from a style tag in the HTML.
+     * Extracts CSS content from all style tags in the HTML.
      * 
-     * @param htmlContent The HTML content containing a style tag
-     * @return The CSS content from the style tag, or null if not found
+     * @param htmlContent The HTML content containing style tags
+     * @return The concatenated CSS content from all style tags, or null if none found
      */
     private static String extractCssFromStyleTag(String htmlContent) {
         Pattern stylePattern = Pattern.compile("<style[^>]*>(.*?)</style>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
         Matcher matcher = stylePattern.matcher(htmlContent);
+        StringBuilder cssContent = new StringBuilder();
+        boolean found = false;
         
-        if (matcher.find()) {
-            return matcher.group(1).trim();
+        while (matcher.find()) {
+            found = true;
+            cssContent.append(matcher.group(1).trim()).append("\n");
         }
         
-        return null;
+        return found ? cssContent.toString() : null;
     }
     
     /**

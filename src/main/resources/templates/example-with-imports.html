@@ -1,0 +1,30 @@
+@import="src/main/resources/templates/header.html"@
+
+<div class="content">
+    <p>Hi {USERNAME},</p>
+    <p>We're excited to have you on board! Your registered email is <strong>{EMAIL}</strong> and your sign-up date is <strong>{SIGNUP_DATE}</strong>.</p>
+    <p>Our service is designed to help you achieve more with less hassle. Explore the features, and let us know if you have any questions.</p>
+    <a href="{CTA_LINK}" class="button">{CTA_TEXT}</a>
+</div>
+
+<style>
+    .content {
+        padding: 20px;
+    }
+    .content p {
+        line-height: 1.6;
+        font-size: 16px;
+    }
+    .button {
+        display: inline-block;
+        padding: 10px 20px;
+        margin-top: 20px;
+        background-color: #007BFF;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+</style>
+
+@import="src/main/resources/templates/footer.html"@ 
