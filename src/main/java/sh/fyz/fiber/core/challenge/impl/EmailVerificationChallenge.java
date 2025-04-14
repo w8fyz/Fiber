@@ -1,7 +1,10 @@
 package sh.fyz.fiber.core.challenge.impl;
 
+import sh.fyz.fiber.FiberServer;
+import sh.fyz.fiber.annotations.dto.IgnoreDTO;
 import sh.fyz.fiber.core.challenge.AbstractChallenge;
 import sh.fyz.fiber.core.challenge.Challenge;
+import sh.fyz.fiber.example.email.VerifyMailEmail;
 
 import java.time.Instant;
 import java.util.Map;
@@ -12,16 +15,21 @@ import java.util.UUID;
  * This challenge type requires users to verify their email address by clicking a link.
  */
 public class EmailVerificationChallenge extends AbstractChallenge {
+    @IgnoreDTO
     private static final long EXPIRATION_HOURS = 24;
+    @IgnoreDTO
     private final String verificationToken;
+    @IgnoreDTO
     private final String email;
 
-    private EmailVerificationChallenge(String userId, String email, String verificationToken) {
+    private EmailVerificationChallenge(Object userId, String email, String verificationToken) {
         super("EMAIL_VERIFICATION", userId, Instant.now().plusSeconds(EXPIRATION_HOURS * 3600));
         this.verificationToken = verificationToken;
         this.email = email;
         addMetadata("verificationToken", verificationToken);
         addMetadata("email", email);
+
+        FiberServer.get().getEmailService().sendEmail(new VerifyMailEmail(email, verificationToken));
     }
 
     /**
@@ -30,7 +38,7 @@ public class EmailVerificationChallenge extends AbstractChallenge {
      * @return A new EmailVerificationChallenge instance
      */
     public static Challenge create(Map<String, Object> params) {
-        String userId = (String) params.get("userId");
+        Object userId = params.get("userId");
         String email = (String) params.get("email");
         
         if (userId == null) {

@@ -25,7 +25,7 @@ public @interface AuditLog {
     /**
      * Whether to log the method result
      */
-    boolean logResult() default false;
+    boolean logResult() default true;
 
     /**
      * Whether to mask sensitive data in logs

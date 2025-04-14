@@ -115,4 +115,10 @@ public abstract class AbstractChallenge extends DTOConvertible implements Challe
     protected void addMetadata(String key, Object value) {
         this.metadata.put(key, value);
     }
+
+
+    @Override
+    public void transform() {
+        getMetadata().clear();
+    }
 }

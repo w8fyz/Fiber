@@ -24,11 +24,11 @@ public class RateLimitProcessor {
             RateLimitInterceptor.checkRateLimit(identifier, method);
             return null;
         } catch (Exception e) {
-            return ResponseEntity.unauthorized(e.getMessage());
+            return ResponseEntity.tooManyRequest(e.getMessage());
         }
     }
 
-    public static void onSuccess(Method method, Object[] args, HttpServletRequest request) {
+    public static void onSuccess(Method method, HttpServletRequest request) {
         RateLimit rateLimit = method.getAnnotation(RateLimit.class);
         if (rateLimit == null) {
             return;

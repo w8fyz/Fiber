@@ -62,12 +62,12 @@ public class AuthController {
             HttpServletResponse response) {
         
         AuthenticationService<?> authService = FiberServer.get().getAuthService();
-        UserAuth user = authService.findUserByIdentifer(value);
+        User user = (User) authService.findUserByIdentifer(value);
         
         if (user != null && authService.validateCredentials(user, password)) {
             // Set auth cookies
 
-            Challenge challenge = FiberServer.get().getChallengeRegistry().createChallenge("CACA", Map.of("userId", user.getId()), new ChallengeCallback() {
+            Challenge challenge = FiberServer.get().getChallengeRegistry().createChallenge("EMAIL_VERIFICATION", Map.of("userId", user.getId(), "email", user.getEmail()), new ChallengeCallback() {
                 @Override
                 public ResponseEntity<Object> onSuccess(Challenge challenge, HttpServletRequest request, HttpServletResponse response) {
                     authService.setAuthCookies(user, request, response);

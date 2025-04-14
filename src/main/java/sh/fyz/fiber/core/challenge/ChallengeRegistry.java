@@ -85,9 +85,7 @@ public class ChallengeRegistry {
     public ResponseEntity<Object> validateChallenge(String challengeId, Object response, HttpServletRequest request, HttpServletResponse httpResponse) {
         return getChallenge(challengeId)
                 .map(challenge -> {
-                    System.out.println("|---> Challenge ID: " + challengeId);
                     if (challenge.isExpired()) {
-                        System.out.println("|---> Challenge expired");
                         try {
                             challenge.setStatus(ChallengeStatus.EXPIRED, request, httpResponse);
                         } catch (IOException e) {
@@ -97,11 +95,9 @@ public class ChallengeRegistry {
                     }
                     boolean isValid = challenge.validateResponse(response);
                     if (isValid) {
-                        System.out.println("|---> Challenge completed");
                         return challenge.complete(request, httpResponse);
                     } else {
                         try {
-                            System.out.println("|---> Challenge failed");
                             return challenge.fail(request, httpResponse);
                         } catch (IOException e) {
                             e.printStackTrace();

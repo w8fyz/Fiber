@@ -5,6 +5,7 @@ import sh.fyz.fiber.annotations.params.Param;
 import sh.fyz.fiber.annotations.params.RequestBody;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.ResponseEntity;
+import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.validation.Min;
 import sh.fyz.fiber.validation.NotBlank;
 
@@ -21,6 +22,7 @@ public class ExampleController {
         return ResponseEntity.ok(response);
     }
 
+    @AuditLog(action = "USER_GREET", logParameters = true, logResult = true, maskSensitiveData = true)
     @RequestMapping(value = "/greet", method = RequestMapping.Method.GET)
     public ResponseEntity<Map<String, String>> greet(@NotBlank @Param("name") String name) {
         Map<String, String> response = new HashMap<>();
@@ -28,6 +30,7 @@ public class ExampleController {
         return ResponseEntity.ok(response);
     }
 
+    @AuditLog(action = "USER_CALCULATE", logParameters = true, logResult = true, maskSensitiveData = true)
     @RequestMapping(value = "/calculate", method = RequestMapping.Method.GET)
     public ResponseEntity<Map<String, Object>> calculate(
             @Min(value = 0) @Param("a") int a,

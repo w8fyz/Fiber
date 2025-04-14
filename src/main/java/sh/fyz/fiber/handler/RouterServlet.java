@@ -70,11 +70,12 @@ public class RouterServlet extends HttpServlet {
             // Log audit event if @AuditLog annotation is present
             AuditLog auditLog = method.getAnnotation(AuditLog.class);
             if (auditLog != null) {
-                AuditLogProcessor.logAuditEvent(auditLog, method, parameters, result);
+                AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, parameters, result);
             }
             
-            // Reset rate limit on success
-            RateLimitProcessor.onSuccess(method, parameters, req);
+            if(resp.getStatus() == 200) { //200 Means success, we reset the RateLimit
+                RateLimitProcessor.onSuccess(method, req);
+            }
         } catch (Exception e) {
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             resp.getOutputStream().write(("Internal server error: " + e.getMessage()).getBytes());

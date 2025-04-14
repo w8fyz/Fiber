@@ -9,11 +9,6 @@ public class LogService implements AuditLogService {
 
     @Override
     public void onAuditLog(AuditLog log) {
-        System.out.println(log.getFormated());
-        try {
-            System.out.println(log.getResult().toString());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        System.out.println(log.getRawLog());
     }
 }

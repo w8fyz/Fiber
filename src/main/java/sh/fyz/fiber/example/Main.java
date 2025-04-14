@@ -5,6 +5,8 @@ import sh.fyz.architect.persistant.DatabaseCredentials;
 import sh.fyz.architect.persistant.sql.provider.PostgreSQLAuth;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
+import sh.fyz.fiber.core.challenge.impl.EmailVerificationChallenge;
+import sh.fyz.fiber.core.email.EmailService;
 
 public class Main {
 
@@ -35,13 +37,22 @@ public class Main {
         server.setAuthService(authService);
         server.setOAuthService(oauthService);
         server.setAuditLogService(new LogService());
+
+        server.setEmailService(new EmailService(
+                "smtp.sendgrid.net",
+                "thibeau.benet@freshperf.fr",
+                465,
+                "apikey","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",
+                true,
+                true
+        ));
         
         // Initialize roles and permissions using class-based roles
         server.getRoleRegistry().registerRoleClasses(
             UserRole.class
         );
 
-        //server.getChallengeRegistry().registerChallengeType("CACA", ExampleChallenge::create);
+        server.getChallengeRegistry().registerChallengeType("EMAIL_VERIFICATION", EmailVerificationChallenge::create);
         
         // Register controllers with dependencies
         server.registerController(new ExampleController());

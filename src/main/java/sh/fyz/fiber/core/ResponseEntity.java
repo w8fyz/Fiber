@@ -51,6 +51,9 @@ public class ResponseEntity<T> {
     public static <T> ResponseEntity<T> serverError(T body) {
         return new ResponseEntity<>(body, 500);
     }
+    public static <T> ResponseEntity<T> tooManyRequest(T body) {
+        return new ResponseEntity<>(body, 429);
+    }
 
     public static <T> ResponseEntity<T> unauthorized(T body) {
         return new ResponseEntity<>(body, 401);
