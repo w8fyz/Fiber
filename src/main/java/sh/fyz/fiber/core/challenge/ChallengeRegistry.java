@@ -3,7 +3,6 @@ package sh.fyz.fiber.core.challenge;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.core.ResponseEntity;
-import sh.fyz.fiber.core.challenge.impl.CaptchaChallenge;
 import sh.fyz.fiber.core.challenge.impl.EmailVerificationChallenge;
 import sh.fyz.fiber.core.challenge.impl.TwoFactorChallenge;
 
@@ -24,11 +23,6 @@ public class ChallengeRegistry {
     public ChallengeRegistry() {
         this.challengeCreators = new ConcurrentHashMap<>();
         this.activeChallenges = new ConcurrentHashMap<>();
-        
-        // Register built-in challenge types
-        registerChallengeType("2FA", TwoFactorChallenge::create);
-        registerChallengeType("EMAIL_VERIFICATION", EmailVerificationChallenge::create);
-        registerChallengeType("CAPTCHA", CaptchaChallenge::create);
     }
 
     /**

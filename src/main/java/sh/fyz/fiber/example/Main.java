@@ -5,7 +5,6 @@ import sh.fyz.architect.persistant.DatabaseCredentials;
 import sh.fyz.architect.persistant.sql.provider.PostgreSQLAuth;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
-import sh.fyz.fiber.core.challenge.impl.ExampleChallenge;
 
 public class Main {
 
@@ -41,7 +40,7 @@ public class Main {
             UserRole.class
         );
 
-        server.getChallengeRegistry().registerChallengeType("CACA", ExampleChallenge::create);
+        //server.getChallengeRegistry().registerChallengeType("CACA", ExampleChallenge::create);
         
         // Register controllers with dependencies
         server.registerController(new ExampleController());

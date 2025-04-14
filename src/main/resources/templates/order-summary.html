@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Order Summary2</title>
+    <style>
+        body {
+            background-color: red;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .footer {
+            font-size: 12px;
+            color: #777;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+            margin-top: 30px;
+        }
+        .order-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .order-table th, .order-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .order-table th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        .order-table tr:hover {
+            background-color: #f9f9f9;
+        }
+        .total-row {
+            font-weight: bold;
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Order Summary</h1>
+    </div>
+
+    <div class="content">
+        <p>Hello {USER_NAME},</p>
+
+        <p>Thank you for your order. Here's a summary of your purchase:</p>
+
+        <p><strong>Order ID:</strong> {ORDER_ID}</p>
+
+        <h2>Order Details</h2>
+
+        {ORDER_ITEMS}
+
+        <p>If you have any questions about your order, please contact our customer service team.</p>
+
+        <p>Thank you for shopping with us!</p>
+    </div>
+
+    <div class="footer">
+        <p>This email was sent to you because you made a purchase with our service.</p>
+        <p>If you did not make this purchase, please contact our support team immediately.</p>
+    </div>
+</body>
+</html>
