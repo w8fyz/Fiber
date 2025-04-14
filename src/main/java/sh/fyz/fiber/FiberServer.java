@@ -20,7 +20,6 @@ import sh.fyz.fiber.core.security.filters.SecurityHeadersFilter;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 import sh.fyz.fiber.core.authentication.RoleRegistry;
-import sh.fyz.fiber.core.authentication.OpenIDAuthenticationService;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -31,7 +30,6 @@ public class FiberServer {
 
     private AuthenticationService<?> authService;
     private OAuth2AuthenticationService<?> oauthService;
-    private OpenIDAuthenticationService<?> openIDService;
     private static FiberServer instance;
     private final Server server;
     private final ServletContextHandler context;
@@ -93,17 +91,6 @@ public class FiberServer {
             throw new IllegalStateException("OAuth2AuthenticationService has not been set");
         }
         return oauthService;
-    }
-
-    public void setOpenIDService(OpenIDAuthenticationService<?> openIDService) {
-        this.openIDService = openIDService;
-    }
-
-    public OpenIDAuthenticationService<?> getOpenIDService() {
-        if (openIDService == null) {
-            throw new IllegalStateException("OpenIDAuthenticationService has not been set");
-        }
-        return openIDService;
     }
 
     /**
