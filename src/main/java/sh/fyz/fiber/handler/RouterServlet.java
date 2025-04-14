@@ -7,7 +7,7 @@ import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.security.processors.RateLimitProcessor;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
-import sh.fyz.fiber.core.security.logging.AuditLogger;
+import sh.fyz.fiber.core.security.logging.AuditLogProcessor;
 
 import java.lang.reflect.Method;
 import java.io.IOException;
@@ -70,7 +70,7 @@ public class RouterServlet extends HttpServlet {
             // Log audit event if @AuditLog annotation is present
             AuditLog auditLog = method.getAnnotation(AuditLog.class);
             if (auditLog != null) {
-                AuditLogger.logAuditEvent(auditLog, method, parameters, result);
+                AuditLogProcessor.logAuditEvent(auditLog, method, parameters, result);
             }
             
             // Reset rate limit on success

@@ -10,6 +10,7 @@ import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.challenge.internal.ChallengeController;
 import sh.fyz.fiber.core.email.EmailService;
+import sh.fyz.fiber.core.security.logging.AuditLogService;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.handler.FiberErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
@@ -29,6 +30,7 @@ public class FiberServer {
     private AuthenticationService<?> authService;
     private OAuth2AuthenticationService<?> oauthService;
     private EmailService emailService;
+    private AuditLogService auditLogService;
     private static FiberServer instance;
     private final Server server;
     private final ServletContextHandler context;
@@ -91,6 +93,14 @@ public class FiberServer {
 
     public ChallengeRegistry getChallengeRegistry() {
         return challengeRegistry;
+    }
+
+    public void setAuditLogService(AuditLogService auditLogService) {
+        this.auditLogService = auditLogService;
+    }
+
+    public AuditLogService getAuditLogService() {
+        return auditLogService;
     }
 
     public void setOAuthService(OAuth2AuthenticationService<?> oauthService) {

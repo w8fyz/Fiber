@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import sh.fyz.fiber.util.FiberObjectMapper;
+import sh.fyz.fiber.util.JsonUtil;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -113,4 +114,19 @@ public class ResponseEntity<T> {
             }
         }
     }
-} 
+
+    @Override
+    public String toString() {
+        try {
+            return JsonUtil.toJson(body);
+        } catch (Exception e) {
+            return "ResponseEntity{" +
+                    "body=" + body +
+                    ", status=" + status +
+                    ", headers=" + headers +
+                    ", contentType='" + contentType + '\'' +
+                    ", uri='" + uri + '\'' +
+                    '}';
+        }
+    }
+}

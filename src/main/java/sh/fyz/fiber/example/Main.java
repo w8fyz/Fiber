@@ -34,6 +34,7 @@ public class Main {
         // Set services in the server
         server.setAuthService(authService);
         server.setOAuthService(oauthService);
+        server.setAuditLogService(new LogService());
         
         // Initialize roles and permissions using class-based roles
         server.getRoleRegistry().registerRoleClasses(
