@@ -1,7 +1,7 @@
 package sh.fyz.fiber.core.security.logging;
 
-public interface AuditLogService {
+public abstract class AuditLogService {
 
-    void onAuditLog(AuditLog log);
+    public abstract void onAuditLog(AuditLog log);
 
 }
