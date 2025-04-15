@@ -15,6 +15,8 @@ public class AuthMiddleware {
     private static final String USER_ID_ATTRIBUTE = "userId";
 
     public static boolean process(HttpServletRequest req, HttpServletResponse resp) {
+        // First check CSRF token
+
         Cookie[] cookies = req.getCookies();
         String token = null;
         
@@ -52,12 +54,12 @@ public class AuthMiddleware {
     /**
      * Get the current user from the request attributes
      */
-    public static UserAuth getCurrentUser(HttpServletRequest req) {
-        Object userId = req.getAttribute(USER_ID_ATTRIBUTE);
-        if (userId == null) {
-            return null;
+    public static UserAuth getCurrentUser(HttpServletRequest request) {
+        Object userId = request.getAttribute(USER_ID_ATTRIBUTE);
+        if (userId != null) {
+            return FiberServer.get().getAuthService().getUserById(userId);
         }
-        return FiberServer.get().getAuthService().getUserById(userId);
+        return null;
     }
 
     /**

@@ -836,4 +836,39 @@ addCookieBtn.addEventListener('click', () => {
 function deleteCookie(name) {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
     loadCookies();
-} 
+}
+
+// CSRF token handling
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+// Add CSRF token to all non-GET requests
+document.addEventListener('DOMContentLoaded', () => {
+    const token = getCookie('XSRF-TOKEN');
+    if (token) {
+        // Add CSRF token to all fetch requests
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            if (!options.method || options.method.toUpperCase() !== 'GET') {
+                options.headers = {
+                    ...options.headers,
+                    'X-CSRF-TOKEN': token
+                };
+            }
+            return originalFetch(url, options);
+        };
+
+        // Add CSRF token to all XHR requests
+        const originalXHROpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            const xhr = this;
+            originalXHROpen.apply(xhr, arguments);
+            if (method.toUpperCase() !== 'GET') {
+                xhr.setRequestHeader('X-CSRF-TOKEN', token);
+            }
+        };
+    }
+}); 

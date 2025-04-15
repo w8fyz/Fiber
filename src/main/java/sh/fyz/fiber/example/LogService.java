@@ -8,6 +8,7 @@ public class LogService extends AuditLogService {
 
     @Override
     public void onAuditLog(AuditLog log) {
+        if(true) return;
         System.out.println("BEGIN LOG TRANSACTION");
         System.out.println("Action : "+log.getAction());
         System.out.println("Method : "+log.getMethod());

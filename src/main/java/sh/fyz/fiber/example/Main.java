@@ -45,7 +45,7 @@ public class Main {
         server.setAuthService(authService);
         server.setOAuthService(oauthService);
         server.setAuditLogService(new LogService());
-
+        server.enableCSRFProtection();
         server.setEmailService(new EmailService(
                 "smtp.sendgrid.net",
                 "thibeau.benet@freshperf.fr",

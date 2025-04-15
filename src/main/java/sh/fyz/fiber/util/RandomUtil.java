@@ -1,28 +1,24 @@
 package sh.fyz.fiber.util;
 
 //Define at load a true random number that we use as a seed for our random number generator
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.Collections;
 
+import java.security.SecureRandom;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
 public class RandomUtil {
 
-    private static final long SEED = getRandomInt();
-    private static final String RANDOM_FETCH_URL = "https://www.random.org/integers/?num=1&min=-100000000&max=100000000&col=1&base=10&format=plain&rnd=new";
-    private static final Random RANDOM = new Random(SEED);
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private static final String ALPHABET = "abcdefghijklmnopqrstuvwxyz";
     private static final String ALPHABET_UPPER = ALPHABET.toUpperCase();
     private static final String ALPHANUMERIC = ALPHABET + ALPHABET_UPPER + "0123456789";
-
-    private static long getRandomInt() {
-        try {
-            String response = HttpUtil.get(RANDOM_FETCH_URL);
-            return Long.parseLong(response.trim());
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch random integer", e);
-        }
-    }
 
     public static int nextInt() {
         return RANDOM.nextInt();
@@ -83,4 +79,5 @@ public class RandomUtil {
         }));
     }
 }
+
 

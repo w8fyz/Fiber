@@ -11,10 +11,13 @@ import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.challenge.internal.ChallengeController;
 import sh.fyz.fiber.core.email.EmailService;
+import sh.fyz.fiber.core.security.cors.CorsService;
 import sh.fyz.fiber.core.security.logging.AuditLogService;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.handler.FiberErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
+import sh.fyz.fiber.middleware.impl.CorsMiddleware;
+import sh.fyz.fiber.middleware.impl.CsrfMiddleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
 import sh.fyz.fiber.handler.RouterServlet;
 import sh.fyz.fiber.core.security.filters.SecurityHeadersFilter;
@@ -24,15 +27,18 @@ import sh.fyz.fiber.core.authentication.RoleRegistry;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class FiberServer {
 
+    private int port = -1;
     private AuthenticationService<?> authService;
     private OAuth2AuthenticationService<?> oauthService;
     private OAuth2ClientService oauthClientService;
     private EmailService emailService;
     private AuditLogService auditLogService;
+    private CorsService corsService;
     private static FiberServer instance;
     private final Server server;
     private final ServletContextHandler context;
@@ -49,6 +55,7 @@ public class FiberServer {
 
     public FiberServer(int port, boolean enableDocumentation) {
         instance = this;
+        this.port = port;
         this.server = new Server(port);
         this.context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         this.globalMiddleware = new ArrayList<>();
@@ -72,7 +79,9 @@ public class FiberServer {
 
         if (enableDocumentation) enableDocumentation();
 
+        //Default value
         registerController(new ChallengeController());
+        addMiddleware(new CorsMiddleware());
     }
 
     public static FiberServer get() {
@@ -80,6 +89,24 @@ public class FiberServer {
             throw new IllegalStateException("FiberServer has not been initialized");
         }
         return instance;
+    }
+
+    public void setCorsService(CorsService corsService) {
+        this.corsService = corsService;
+    }
+
+    public CorsService getCorsService() {
+        if (corsService == null) {
+            //Set default config if none is present
+            this.corsService = new CorsService()
+                    .addAllowedOrigin("http://localhost:"+port)
+                    .addAllowedOrigin("http://127.0.0.1:"+port)
+                    .setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"))
+                    .setAllowedHeaders(Arrays.asList("Content-Type", "Authorization"))
+                    .setAllowCredentials(true)
+                    .setMaxAge(3600);
+        }
+        return corsService;
     }
 
     public void setOauthClientService(OAuth2ClientService oauthClientService) {
@@ -181,6 +208,10 @@ public class FiberServer {
 
     public void addMiddleware(Middleware middleware) {
         globalMiddleware.add(middleware);
+    }
+
+    public void enableCSRFProtection() {
+        addMiddleware(new CsrfMiddleware());
     }
 
     private void enableDocumentation() {
