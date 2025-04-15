@@ -1,4 +1,4 @@
-package sh.fyz.fiber.example;
+package sh.fyz.fiber.example.controller;
 
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.params.Param;

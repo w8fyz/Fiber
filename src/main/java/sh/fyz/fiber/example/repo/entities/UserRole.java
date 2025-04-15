@@ -1,4 +1,4 @@
-package sh.fyz.fiber.example;
+package sh.fyz.fiber.example.repo.entities;
 
 import sh.fyz.fiber.core.authentication.entities.Role;
 

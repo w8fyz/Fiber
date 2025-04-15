@@ -1,4 +1,4 @@
-package sh.fyz.fiber.example;
+package sh.fyz.fiber.example.controller;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,6 +20,9 @@ import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
 import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
+import sh.fyz.fiber.example.Main;
+import sh.fyz.fiber.example.OAuthService;
+import sh.fyz.fiber.example.repo.entities.User;
 
 import java.io.IOException;
 import java.util.HashMap;

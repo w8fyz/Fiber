@@ -4,13 +4,20 @@ import sh.fyz.architect.Architect;
 import sh.fyz.architect.persistant.DatabaseCredentials;
 import sh.fyz.architect.persistant.sql.provider.PostgreSQLAuth;
 import sh.fyz.fiber.FiberServer;
-import sh.fyz.fiber.core.challenge.ChallengeRegistry;
+import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
 import sh.fyz.fiber.core.challenge.impl.EmailVerificationChallenge;
 import sh.fyz.fiber.core.email.EmailService;
+import sh.fyz.fiber.example.controller.AuthController;
+import sh.fyz.fiber.example.controller.ExampleController;
+import sh.fyz.fiber.example.oauth2.providers.DiscordProvider;
+import sh.fyz.fiber.example.repo.Oauth2ClientRepository;
+import sh.fyz.fiber.example.repo.UserRepository;
+import sh.fyz.fiber.example.repo.entities.UserRole;
 
 public class Main {
 
     public static UserRepository userRepository;
+    public static Oauth2ClientRepository oauth2clientRepository;
     public static void main(String[] args) throws Exception {
 
         Architect architect = new Architect()
@@ -27,6 +34,7 @@ public class Main {
         
         // Initialize repositories and services
         userRepository = new UserRepository();
+        oauth2clientRepository = new Oauth2ClientRepository();
         ImplAuthService authService = new ImplAuthService(userRepository);
         OAuthService oauthService = new OAuthService(authService, userRepository);
         
@@ -46,6 +54,8 @@ public class Main {
                 true,
                 true
         ));
+
+        server.setOauthClientService(new OAuth2ClientService(oauth2clientRepository));
         
         // Initialize roles and permissions using class-based roles
         server.getRoleRegistry().registerRoleClasses(

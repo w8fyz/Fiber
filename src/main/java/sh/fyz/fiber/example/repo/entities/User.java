@@ -1,4 +1,4 @@
-package sh.fyz.fiber.example;
+package sh.fyz.fiber.example.repo.entities;
 
 import jakarta.persistence.*;
 import sh.fyz.architect.entities.IdentifiableEntity;

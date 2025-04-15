@@ -1,4 +1,4 @@
-package sh.fyz.fiber.example;
+package sh.fyz.fiber.example.tests;
 
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.email.MailColumn;

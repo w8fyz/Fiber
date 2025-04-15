@@ -7,6 +7,7 @@ import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
+import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.challenge.internal.ChallengeController;
 import sh.fyz.fiber.core.email.EmailService;
@@ -29,6 +30,7 @@ public class FiberServer {
 
     private AuthenticationService<?> authService;
     private OAuth2AuthenticationService<?> oauthService;
+    private OAuth2ClientService oauthClientService;
     private EmailService emailService;
     private AuditLogService auditLogService;
     private static FiberServer instance;
@@ -78,6 +80,17 @@ public class FiberServer {
             throw new IllegalStateException("FiberServer has not been initialized");
         }
         return instance;
+    }
+
+    public void setOauthClientService(OAuth2ClientService oauthClientService) {
+        this.oauthClientService = oauthClientService;
+    }
+
+    public OAuth2ClientService getOauthClientService() {
+        if (oauthClientService == null) {
+            throw new IllegalStateException("OAuth2ClientService has not been set");
+        }
+        return oauthClientService;
     }
 
     public void setAuthService(AuthenticationService<?> authService) {

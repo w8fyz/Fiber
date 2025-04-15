@@ -1,6 +1,8 @@
-package sh.fyz.fiber.example;
+package sh.fyz.fiber.example.repo;
 
 import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.fiber.example.repo.entities.User;
+
 import java.util.List;
 
 public class UserRepository extends GenericRepository<User> {

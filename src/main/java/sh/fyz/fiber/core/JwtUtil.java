@@ -59,7 +59,7 @@ public class JwtUtil {
      * @param validity The validity period in milliseconds
      * @return The generated JWT token
      */
-    private static String createToken(Map<String, Object> claims, long validity) {
+    public static String createToken(Map<String, Object> claims, long validity) {
         return Jwts.builder()
                 .setClaims(claims)
                 .setIssuedAt(new Date(System.currentTimeMillis()))

@@ -1,6 +1,7 @@
-package sh.fyz.fiber.example;
+package sh.fyz.fiber.example.oauth2.providers;
 
 import sh.fyz.fiber.core.authentication.oauth2.impl.DiscordOAuth2Provider;
+import sh.fyz.fiber.example.repo.entities.User;
 
 import java.util.Map;
 

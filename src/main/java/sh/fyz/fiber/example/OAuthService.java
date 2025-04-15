@@ -4,6 +4,8 @@ import sh.fyz.architect.repositories.GenericRepository;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
+import sh.fyz.fiber.example.repo.UserRepository;
+import sh.fyz.fiber.example.repo.entities.User;
 
 import java.util.Map;
 
