@@ -12,11 +12,11 @@ import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.challenge.internal.ChallengeController;
 import sh.fyz.fiber.core.email.EmailService;
 import sh.fyz.fiber.core.security.cors.CorsService;
+import sh.fyz.fiber.core.security.csrf.CsrfController;
 import sh.fyz.fiber.core.security.logging.AuditLogService;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.handler.FiberErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
-import sh.fyz.fiber.middleware.impl.CorsMiddleware;
 import sh.fyz.fiber.middleware.impl.CsrfMiddleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
 import sh.fyz.fiber.handler.RouterServlet;
@@ -32,6 +32,7 @@ import java.util.List;
 
 public class FiberServer {
 
+    private boolean isDev = false;
     private int port = -1;
     private AuthenticationService<?> authService;
     private OAuth2AuthenticationService<?> oauthService;
@@ -81,7 +82,15 @@ public class FiberServer {
 
         //Default value
         registerController(new ChallengeController());
-        addMiddleware(new CorsMiddleware());
+    }
+
+    public void enableDevelopmentMode() {
+        System.out.println("Development mode enabled");
+        this.isDev = true;
+    }
+
+    public boolean isDev() {
+        return isDev;
     }
 
     public static FiberServer get() {
@@ -92,6 +101,7 @@ public class FiberServer {
     }
 
     public void setCorsService(CorsService corsService) {
+        System.out.println("Setting CORS service: " + corsService);
         this.corsService = corsService;
     }
 
@@ -101,6 +111,8 @@ public class FiberServer {
             this.corsService = new CorsService()
                     .addAllowedOrigin("http://localhost:"+port)
                     .addAllowedOrigin("http://127.0.0.1:"+port)
+                    .addAllowedOrigin("http://localhost:3000")
+                    .addAllowedOrigin("http://127.0.0.1:3000")
                     .setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"))
                     .setAllowedHeaders(Arrays.asList("Content-Type", "Authorization"))
                     .setAllowCredentials(true)
@@ -212,6 +224,7 @@ public class FiberServer {
 
     public void enableCSRFProtection() {
         addMiddleware(new CsrfMiddleware());
+        registerController(new CsrfController());
     }
 
     private void enableDocumentation() {
@@ -265,6 +278,7 @@ public class FiberServer {
         context.addServlet(holder, "/*");
         context.setErrorHandler(new FiberErrorHandler());
         server.start();
+        System.out.println("WARNING: This server is running in development mode. Do not use in production.");
     }
 
     public void stop() throws Exception {

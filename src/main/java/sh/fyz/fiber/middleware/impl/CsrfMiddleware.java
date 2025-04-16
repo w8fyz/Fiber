@@ -2,6 +2,7 @@ package sh.fyz.fiber.middleware.impl;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.middleware.Middleware;
 
@@ -17,6 +18,12 @@ public class CsrfMiddleware implements Middleware {
     private static final String CSRF_COOKIE = "XSRF-TOKEN";
     private static final SecureRandom secureRandom = new SecureRandom();
     private static final Set<String> SAFE_METHODS = new HashSet<>(Set.of("GET", "HEAD", "OPTIONS"));
+
+    @Override
+    public int priority() {
+        return 1;
+    }
+
     @Override
     public boolean handle(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String method = req.getMethod();
@@ -60,9 +67,10 @@ public class CsrfMiddleware implements Middleware {
     }
 
     private static void setCsrfToken(HttpServletResponse resp, String token) {
+        String cookieAttributes = "; Path=/; SameSite=Strict" + (!FiberServer.get().isDev() ? "; Secure" : "");
+        
         resp.addHeader("Set-Cookie",
-                CSRF_COOKIE + "=" + token +
-                        "; Path=/; SameSite=Strict; Secure; HttpOnly");
+                CSRF_COOKIE + "=" + token + cookieAttributes);
         resp.setHeader(CSRF_HEADER, token);
     }
 }

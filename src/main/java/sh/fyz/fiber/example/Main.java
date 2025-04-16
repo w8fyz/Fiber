@@ -7,12 +7,15 @@ import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
 import sh.fyz.fiber.core.challenge.impl.EmailVerificationChallenge;
 import sh.fyz.fiber.core.email.EmailService;
+import sh.fyz.fiber.core.security.cors.CorsService;
 import sh.fyz.fiber.example.controller.AuthController;
 import sh.fyz.fiber.example.controller.ExampleController;
 import sh.fyz.fiber.example.oauth2.providers.DiscordProvider;
 import sh.fyz.fiber.example.repo.Oauth2ClientRepository;
 import sh.fyz.fiber.example.repo.UserRepository;
 import sh.fyz.fiber.example.repo.entities.UserRole;
+
+import java.util.Arrays;
 
 public class Main {
 
@@ -30,8 +33,8 @@ public class Main {
         architect.start();
 
         // Create server
-        FiberServer server = new FiberServer(8080, true);
-        
+        FiberServer server = new FiberServer(9090, true);
+        server.enableDevelopmentMode();
         // Initialize repositories and services
         userRepository = new UserRepository();
         oauth2clientRepository = new Oauth2ClientRepository();
@@ -55,6 +58,21 @@ public class Main {
                 true
         ));
 
+        server.setCorsService(new CorsService()
+                .addAllowedOrigin("http://localhost:3000")
+                .addAllowedOrigin("http://127.0.0.1:3000")
+                .addAllowedOrigin("https://85zg9d.csb.app")
+                .setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"))
+                .setAllowedHeaders(Arrays.asList(
+                    "Content-Type",
+                    "Authorization",
+                    "X-CSRF-TOKEN",
+                    "X-Requested-With",
+                    "Accept",
+                    "Origin"
+                ))
+                .setAllowCredentials(true)
+                .setMaxAge(3600));
         server.setOauthClientService(new OAuth2ClientService(oauth2clientRepository));
         
         // Initialize roles and permissions using class-based roles
@@ -71,8 +89,8 @@ public class Main {
         // Start the server
         server.start();
         
-        System.out.println("Server started on http://localhost:8080");
-        System.out.println("API Documentation available at http://localhost:8080/docs/ui");
-        System.out.println("Raw API Documentation available at http://localhost:8080/docs/api");
+        System.out.println("Server started on http://localhost:9090");
+        System.out.println("API Documentation available at http://localhost:9090/docs/ui");
+        System.out.println("Raw API Documentation available at http://localhost:9090/docs/api");
     }
 } 

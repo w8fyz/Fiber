@@ -61,11 +61,6 @@ public class EndpointRegistry {
             System.out.println("Endpoint already registered: " + key);
             return; // Skip if endpoint is already registered
         }
-        System.out.println("Registering endpoint: " + key);
-        System.out.println("  Controller: " + controllerInstance.getClass().getName());
-        System.out.println("  Method: " + method.getName());
-        System.out.println("  Path: " + path);
-        System.out.println("  HTTP Method: " + httpMethod);
         endpoints.put(key, new EndpointHandler(controllerInstance, method, globalMiddleware, requiredRoles));
     }
 

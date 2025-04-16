@@ -10,5 +10,8 @@ import java.io.IOException;
 *   Use sh.fyz.fiber.core.Fiber.registerMiddleware() to register a middleware.
 * */
 public interface Middleware {
+
+    int priority();
+
     boolean handle(HttpServletRequest request, HttpServletResponse response) throws IOException;
 } 

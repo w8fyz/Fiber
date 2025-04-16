@@ -23,7 +23,10 @@ import sh.fyz.fiber.core.authentication.entities.Role;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,11 +76,15 @@ public class EndpointHandler extends HttpServlet {
     }
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
         if (method.isAnnotationPresent(RequestMapping.class)) {
             RequestMapping mapping = method.getAnnotation(RequestMapping.class);
             if (mapping.method() == RequestMapping.Method.GET) {
-                handleRequest(req, resp);
+                try {
+                    handleRequest(req, resp);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             } else {
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_METHOD_NOT_ALLOWED, "Method not allowed");
             }
@@ -85,11 +92,15 @@ public class EndpointHandler extends HttpServlet {
     }
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) {
         if (method.isAnnotationPresent(RequestMapping.class)) {
             RequestMapping mapping = method.getAnnotation(RequestMapping.class);
             if (mapping.method() == RequestMapping.Method.POST) {
-                handleRequest(req, resp);
+                try {
+                    handleRequest(req, resp);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             } else {
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_METHOD_NOT_ALLOWED, "Method not allowed");
             }
@@ -97,11 +108,16 @@ public class EndpointHandler extends HttpServlet {
     }
 
     @Override
-    protected void doPut(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doPut(HttpServletRequest req, HttpServletResponse resp) {
+        System.out.println("POST DETECTED");
         if (method.isAnnotationPresent(RequestMapping.class)) {
             RequestMapping mapping = method.getAnnotation(RequestMapping.class);
             if (mapping.method() == RequestMapping.Method.PUT) {
-                handleRequest(req, resp);
+                try {
+                    handleRequest(req, resp);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             } else {
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_METHOD_NOT_ALLOWED, "Method not allowed");
             }
@@ -109,18 +125,37 @@ public class EndpointHandler extends HttpServlet {
     }
 
     @Override
-    protected void doDelete(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doDelete(HttpServletRequest req, HttpServletResponse resp) {
         if (method.isAnnotationPresent(RequestMapping.class)) {
             RequestMapping mapping = method.getAnnotation(RequestMapping.class);
             if (mapping.method() == RequestMapping.Method.DELETE) {
-                handleRequest(req, resp);
+                try {
+                    handleRequest(req, resp);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             } else {
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_METHOD_NOT_ALLOWED, "Method not allowed");
+            }
+        }
+    }
+
+    @Override
+    protected void doOptions(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        System.out.println("Handling OPTIONS request");
+        // Execute global middleware (which includes CORS)
+        List<Middleware> sortedMiddleware = new ArrayList<>(globalMiddleware);
+        Collections.sort(sortedMiddleware, Comparator.comparingInt(Middleware::priority));
+        for (Middleware middleware : sortedMiddleware) {
+            System.out.println("Executing middleware for OPTIONS: " + middleware.getClass().getSimpleName());
+            if (!middleware.handle(req, resp)) {
+                return;
             }
         }
     }
 
     public Object handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        System.out.println("Handling request for method: " + method.getName());
         // Log request details
 
         // Check if method requires authentication (either through roles, permissions, or @AuthenticatedUser)
@@ -178,7 +213,12 @@ public class EndpointHandler extends HttpServlet {
         }
 
         // Execute global middleware
-        for (Middleware middleware : globalMiddleware) {
+        System.out.println("EXECUTE GLOBAL MIDDLEWARES");
+        List<Middleware> sortedMiddleware = new ArrayList<>(globalMiddleware);
+        System.out.println("Size : " + sortedMiddleware.size());
+        Collections.sort(sortedMiddleware, Comparator.comparingInt(Middleware::priority));
+        for (Middleware middleware : sortedMiddleware) {
+            System.out.println("Executing middleware: " + middleware.getClass().getSimpleName());
             if (!middleware.handle(req, resp)) {
                 return null;
             }

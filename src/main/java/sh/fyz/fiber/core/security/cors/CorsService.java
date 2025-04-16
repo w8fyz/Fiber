@@ -2,6 +2,7 @@ package sh.fyz.fiber.core.security.cors;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.FiberServer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,17 +50,45 @@ public class CorsService {
     }
 
     public boolean isOriginAllowed(String origin) {
+        System.out.println("========");
+        System.out.println("Checking if origin is allowed: " + origin);
+        System.out.println("Allowed Origins: " + String.join(", ", allowedOrigins));
+        System.out.println("========");
+
+        if (origin == null && FiberServer.get().isDev()) {
+            return true;
+        }
+        
         if (allowedOrigins.isEmpty()) {
             return false;
         }
         return allowedOrigins.contains("*") || allowedOrigins.contains(origin);
     }
 
+    public void handlePreflightRequest(HttpServletRequest request, HttpServletResponse response) {
+        String origin = request.getHeader("Origin");
+        String requestMethod = request.getHeader("Access-Control-Request-Method");
+        String requestHeaders = request.getHeader("Access-Control-Request-Headers");
+
+        if ((origin != null || FiberServer.get().isDev()) && requestMethod != null && isOriginAllowed(origin)) {
+            configureCorsHeaders(request, response);
+            
+            // Pour les requêtes OPTIONS, on renvoie 200 OK
+            response.setStatus(HttpServletResponse.SC_OK);
+            System.out.println("Preflight request handled successfully");
+        } else {
+            System.out.println("Preflight request failed validation");
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            if (origin == null) System.out.println("Origin is null");
+            if (requestMethod == null) System.out.println("Request method is null");
+            if (!isOriginAllowed(origin)) System.out.println("Origin not allowed");
+        }
+    }
+
     public void configureCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
         String origin = request.getHeader("Origin");
-        
-        if (origin != null && isOriginAllowed(origin)) {
-            // Si credentials sont autorisés, on ne peut pas utiliser le wildcard "*"
+        if ((origin != null || FiberServer.get().isDev()) && isOriginAllowed(origin)) {
+            // Si credentials sont autorisés, on doit spécifier l'origine exacte
             if (allowCredentials) {
                 response.setHeader("Access-Control-Allow-Origin", origin);
                 response.setHeader("Access-Control-Allow-Credentials", "true");
@@ -72,6 +101,12 @@ public class CorsService {
             response.setHeader("Access-Control-Allow-Methods", String.join(", ", allowedMethods));
             response.setHeader("Access-Control-Allow-Headers", String.join(", ", allowedHeaders));
             response.setHeader("Access-Control-Max-Age", String.valueOf(maxAge));
+            
+            // Ajout de Vary: Origin pour le cache
+            response.addHeader("Vary", "Origin");
+        } else {
+            // Si l'origine n'est pas autorisée, on ne configure pas les en-têtes CORS
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         }
     }
 } 

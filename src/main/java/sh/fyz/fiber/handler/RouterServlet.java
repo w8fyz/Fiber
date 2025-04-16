@@ -3,6 +3,7 @@ package sh.fyz.fiber.handler;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.security.processors.RateLimitProcessor;
@@ -23,9 +24,27 @@ public class RouterServlet extends HttpServlet {
     @Override
     protected void service(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try {
-            // Find the matching endpoint using pattern matching
             String requestUri = req.getRequestURI();
             String requestMethod = req.getMethod();
+            
+            System.out.println("Received " + requestMethod + " request for: " + requestUri);
+
+            // Gérer CORS en premier
+            if (requestMethod.equals("OPTIONS")) {
+                System.out.println("Processing OPTIONS request");
+                FiberServer.get().getCorsService().handlePreflightRequest(req, resp);
+                return;
+            }
+
+            // Vérifier les en-têtes CORS pour toutes les autres requêtes
+            // Si l'origine n'est pas autorisée, configureCorsHeaders renverra un 403
+            FiberServer.get().getCorsService().configureCorsHeaders(req, resp);
+            if (resp.getStatus() == HttpServletResponse.SC_FORBIDDEN) {
+                System.out.println("CORS check failed - unauthorized origin ("+req.getHeader("Origin")+")");
+                return;
+            }
+
+            // Continuer le traitement seulement si CORS est OK
             EndpointHandler matchedEndpoint = null;
             
             // Try to find a matching endpoint
@@ -49,6 +68,7 @@ public class RouterServlet extends HttpServlet {
             }
             
             if (matchedEndpoint == null) {
+                System.out.println("No matching endpoint found for: " + requestUri);
                 resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
@@ -72,11 +92,13 @@ public class RouterServlet extends HttpServlet {
             if (auditLog != null) {
                 AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, parameters, result);
             }
-            
+
             if(resp.getStatus() == 200) { //200 Means success, we reset the RateLimit
                 RateLimitProcessor.onSuccess(method, req);
             }
         } catch (Exception e) {
+            System.err.println("Error processing request: " + e.getMessage());
+            e.printStackTrace();
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             resp.getOutputStream().write(("Internal server error: " + e.getMessage()).getBytes());
         }

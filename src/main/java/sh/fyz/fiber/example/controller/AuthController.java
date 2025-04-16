@@ -42,10 +42,9 @@ public class AuthController {
     @AuditLog(action = "USER_REGISTRATION", logParameters = true, maskSensitiveData = true)
     public ResponseEntity<String> register(@RequestBody User user) {
         User creating = new User();
-        creating.setName(user.getName());
-        creating.setAge(user.getAge());
         creating.setEmail(user.getEmail());
         creating.setUsername(user.getUsername());
+        creating.setRole("user");
         UserFieldUtil.setPassword(creating, user.getPassword());
         boolean exist = FiberServer.get().getAuthService().doesIdentifiersAlreadyExists(user);
         if(exist) {
