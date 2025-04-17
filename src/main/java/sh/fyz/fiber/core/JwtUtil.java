@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 
 import java.security.Key;
@@ -16,10 +17,10 @@ import java.util.function.Function;
  * Utility class for handling JWT (JSON Web Token) operations.
  */
 public class JwtUtil {
-    private static final String SECRET_KEY = System.getenv("JWT_SECRET_KEY");
-    private static final long TOKEN_VALIDITY = 3600000; // 1 hour in milliseconds
-    private static final long REFRESH_TOKEN_VALIDITY = 7 * 24 * 3600000; // 7 days in milliseconds
-    private static final Key key = Keys.hmacShaKeyFor((SECRET_KEY != null ? SECRET_KEY : "your-secret-key-should-be-very-long-and-secure-in-production").getBytes());
+    private static final String SECRET_KEY = FiberServer.get().getConfig().getJwtSecretKey();
+    private static final long TOKEN_VALIDITY = FiberServer.get().getConfig().getJwtTokenValidity();
+    private static final long REFRESH_TOKEN_VALIDITY = FiberServer.get().getConfig().getJwtRefreshTokenValidity();
+    private static final Key key = Keys.hmacShaKeyFor((SECRET_KEY).getBytes());
 
     /**
      * Generate a JWT token for a user

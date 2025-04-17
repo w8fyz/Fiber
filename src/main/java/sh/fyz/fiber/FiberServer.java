@@ -5,6 +5,7 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
+import sh.fyz.fiber.config.FiberConfig;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
@@ -34,6 +35,7 @@ public class FiberServer {
 
     private boolean isDev = false;
     private int port = -1;
+    private FiberConfig config;
     private AuthenticationService<?> authService;
     private OAuth2AuthenticationService<?> oauthService;
     private OAuth2ClientService oauthClientService;
@@ -50,12 +52,17 @@ public class FiberServer {
     private final RoleRegistry roleRegistry;
     private final ChallengeRegistry challengeRegistry;
 
+    public FiberConfig getConfig() {
+        return config;
+    }
+
     public FiberServer(int port) {
         this(port, false);
     }
 
     public FiberServer(int port, boolean enableDocumentation) {
         instance = this;
+        this.config = new FiberConfig();
         this.port = port;
         this.server = new Server(port);
         this.context = new ServletContextHandler(ServletContextHandler.SESSIONS);
