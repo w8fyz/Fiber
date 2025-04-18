@@ -165,7 +165,7 @@ public class AuthController {
                 authService.setAuthCookies(user, request, response);
                 
                 Map<String, String> tokens = new HashMap<>();
-                tokens.put("token_type", "Bearer");
+                tokens.put("token_type", "Cookie");
                 tokens.put("expires_in", "3600");
                 
                 return ResponseEntity.ok(tokens);
