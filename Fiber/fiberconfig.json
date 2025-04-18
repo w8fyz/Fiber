@@ -1,0 +1,5 @@
+{
+  "JWT_SECRET_KEY": "your-secret-key-please-dont-use-that-in-prod",
+  "JWT_TOKEN_VALIDITY": 3600000,
+  "JWT_REFRESH_TOKEN_VALIDITY": 604800000
+}

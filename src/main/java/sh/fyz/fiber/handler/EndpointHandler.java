@@ -8,17 +8,23 @@ import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.params.AuthenticatedUser;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.annotations.request.Controller;
+import sh.fyz.fiber.annotations.security.AuthType;
+import sh.fyz.fiber.annotations.security.NoCors;
+import sh.fyz.fiber.annotations.security.NoCSRF;
 import sh.fyz.fiber.annotations.security.Permission;
 import sh.fyz.fiber.core.authentication.AuthMiddleware;
+import sh.fyz.fiber.core.authentication.AuthScheme;
+import sh.fyz.fiber.core.authentication.AuthResolver;
+import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.ResponseEntity;
-import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import sh.fyz.fiber.core.authentication.entities.Role;
+import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.util.JsonUtil;
 import sh.fyz.fiber.handler.parameter.ParameterHandler;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 import sh.fyz.fiber.core.authentication.RoleRegistry;
-import sh.fyz.fiber.core.authentication.entities.Role;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -27,9 +33,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Set;
 
 public class EndpointHandler extends HttpServlet {
     private final Object controller;
@@ -154,61 +162,79 @@ public class EndpointHandler extends HttpServlet {
         }
     }
 
-    public Object handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        System.out.println("Handling request for method: " + method.getName());
-        // Log request details
+    private boolean shouldApplyCors(Method method) {
+        return !method.isAnnotationPresent(NoCors.class);
+    }
 
-        // Check if method requires authentication (either through roles, permissions, or @AuthenticatedUser)
-        boolean requiresAuth = (requiredRoles != null && requiredRoles.length > 0) || 
-                              (requiredPermissions != null && requiredPermissions.length > 0);
+    private boolean shouldApplyCsrf(Method method) {
+        return !method.isAnnotationPresent(NoCSRF.class);
+    }
+
+    private Set<AuthScheme> getAcceptedAuthSchemes(Method method) {
+        AuthType authType = method.getAnnotation(AuthType.class);
+        if (authType != null) {
+            Set<AuthScheme> schemes = new HashSet<>(Arrays.asList(authType.value()));
+            // Remove BASIC from user auth schemes if we have OAuth2ApplicationInfo parameter
+            if (requiresBasicAuth(method)) {
+                schemes.remove(AuthScheme.BASIC);
+            }
+            return schemes;
+        }
+        
+        // Si pas d'AuthType mais @AuthenticatedUser est présent, utiliser COOKIE par défaut
         for (Parameter parameter : method.getParameters()) {
             if (parameter.isAnnotationPresent(AuthenticatedUser.class)) {
-                requiresAuth = true;
-                break;
+                return new HashSet<>(Collections.singletonList(AuthScheme.COOKIE));
+            }
+        }
+        
+        return Collections.emptySet();
+    }
+
+    private boolean requiresBasicAuth(Method method) {
+        for (Parameter parameter : method.getParameters()) {
+            if (parameter.getType() == OAuth2ApplicationInfo.class) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public Object handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        // Apply CORS if not disabled
+        if (shouldApplyCors(method)) {
+            FiberServer.get().getCorsService().configureCorsHeaders(req, resp);
+            if (req.getMethod().equals("OPTIONS")) {
+                FiberServer.get().getCorsService().handlePreflightRequest(req, resp);
+                return null;
             }
         }
 
-        // Process authentication if required
-        if (requiresAuth) {
-            if (!AuthMiddleware.process(req, resp)) {
+        // Apply CSRF if not disabled
+        if (shouldApplyCsrf(method) && !req.getMethod().equals("GET")) {
+            if (!FiberServer.get().getCsrfMiddleware().handle(req, resp)) {
                 return null;
             }
+        }
 
-            UserAuth user = AuthMiddleware.getCurrentUser(req);
-            if (user == null) {
+        // Handle OAuth2 application authentication first
+        OAuth2ApplicationInfo authenticatedApp = null;
+        if (requiresBasicAuth(method)) {
+            authenticatedApp = FiberServer.get().getBasicAuthenticator().authenticate(req);
+            if (authenticatedApp == null) {
+                ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Invalid client credentials");
+                return null;
+            }
+        }
+
+        // Then handle user authentication if needed
+        Set<AuthScheme> acceptedSchemes = getAcceptedAuthSchemes(method);
+        UserAuth authenticatedUser = null;
+        if (!acceptedSchemes.isEmpty()) {
+            authenticatedUser = FiberServer.get().getAuthResolver().resolveUser(req, acceptedSchemes);
+            if (authenticatedUser == null) {
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
                 return null;
-            }
-
-            String userRole = user.getRole();
-            RoleRegistry roleRegistry = FiberServer.get().getRoleRegistry();
-            Role role = roleRegistry.getRole(userRole);
-            
-            if (role == null) {
-                ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "User has no valid role");
-                return null;
-            }
-            
-            // Check if user has required role
-            if (requiredRoles != null && requiredRoles.length > 0) {
-                boolean hasRequiredRole = Arrays.stream(requiredRoles)
-                    .anyMatch(required -> role.getIdentifier().equals(required));
-                
-                if (!hasRequiredRole) {
-                    ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient role");
-                    return null;
-                }
-            }
-            
-            // Check if user has required permissions
-            if (requiredPermissions != null && requiredPermissions.length > 0) {
-                boolean hasRequiredPermissions = Arrays.stream(requiredPermissions)
-                    .allMatch(permission -> role.hasPermission(permission));
-                
-                if (!hasRequiredPermissions) {
-                    ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_FORBIDDEN, "Insufficient permissions");
-                    return null;
-                }
             }
         }
 
@@ -238,22 +264,24 @@ public class EndpointHandler extends HttpServlet {
             Object[] args = new Object[method.getParameterCount()];
             for (int i = 0; i < method.getParameterCount(); i++) {
                 Parameter parameter = method.getParameters()[i];
-                ParameterHandler handler = ParameterHandlerRegistry.findHandler(parameter);
-                
-                if (handler == null) {
-                    throw new IllegalArgumentException("No handler found for parameter: " + parameter.getName());
-                }
-                
-                try {
-                    args[i] = handler.handle(parameter, req, resp, matcher);
-                } catch (Exception e) {
-                    if (e instanceof IllegalArgumentException) {
-                        ErrorResponse.send(resp, path, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
-                    } else {
-                        e.printStackTrace();
-                        ErrorResponse.send(resp, path, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal server error");
+                if (parameter.isAnnotationPresent(AuthenticatedUser.class)) {
+                    args[i] = authenticatedUser;
+                } else {
+                    ParameterHandler handler = ParameterHandlerRegistry.findHandler(parameter);
+                    if (handler == null) {
+                        throw new IllegalArgumentException("No handler found for parameter: " + parameter.getName());
                     }
-                    return null;
+                    try {
+                        args[i] = handler.handle(parameter, req, resp, matcher);
+                    } catch (Exception e) {
+                        if (e instanceof IllegalArgumentException) {
+                            ErrorResponse.send(resp, path, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+                        } else {
+                            e.printStackTrace();
+                            ErrorResponse.send(resp, path, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal server error");
+                        }
+                        return null;
+                    }
                 }
             }
 

@@ -85,6 +85,7 @@ public class Main {
         // Register controllers with dependencies
         server.registerController(new ExampleController());
         server.registerController(new AuthController(oauthService));
+        server.registerController(new Test2Controller());
         
         // Start the server
         server.start();

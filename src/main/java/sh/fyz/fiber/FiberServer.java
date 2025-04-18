@@ -25,6 +25,9 @@ import sh.fyz.fiber.core.security.filters.SecurityHeadersFilter;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 import sh.fyz.fiber.core.authentication.RoleRegistry;
+import sh.fyz.fiber.core.authentication.AuthResolver;
+import sh.fyz.fiber.core.authentication.impl.BasicAuthenticator;
+import sh.fyz.fiber.handler.parameter.OAuth2ApplicationInfoParameterHandler;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -41,7 +44,6 @@ public class FiberServer {
     private OAuth2ClientService oauthClientService;
     private EmailService emailService;
     private AuditLogService auditLogService;
-    private CorsService corsService;
     private static FiberServer instance;
     private final Server server;
     private final ServletContextHandler context;
@@ -51,6 +53,10 @@ public class FiberServer {
     private boolean documentationEnabled;
     private final RoleRegistry roleRegistry;
     private final ChallengeRegistry challengeRegistry;
+    private final AuthResolver authResolver;
+    private final CsrfMiddleware csrfMiddleware;
+    private CorsService corsService;
+    private final BasicAuthenticator basicAuthenticator;
 
     public FiberConfig getConfig() {
         return config;
@@ -72,12 +78,17 @@ public class FiberServer {
         this.documentationEnabled = false;
         this.roleRegistry = new RoleRegistry();
         this.challengeRegistry = new ChallengeRegistry();
+        this.authResolver = new AuthResolver();
+        this.csrfMiddleware = new CsrfMiddleware();
+        this.corsService = new CorsService();
+        this.basicAuthenticator = new BasicAuthenticator();
 
         // Initialize validation system
         ValidationInitializer.initialize();
 
         // Initialize parameter handlers
         ParameterHandlerRegistry.initialize();
+
 
         // Set up server
         server.setHandler(context);
@@ -298,5 +309,17 @@ public class FiberServer {
 
     public EmailService getEmailService() {
         return emailService;
+    }
+
+    public AuthResolver getAuthResolver() {
+        return authResolver;
+    }
+
+    public CsrfMiddleware getCsrfMiddleware() {
+        return csrfMiddleware;
+    }
+
+    public BasicAuthenticator getBasicAuthenticator() {
+        return basicAuthenticator;
     }
 } 
