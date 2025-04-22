@@ -75,34 +75,6 @@ public class OAuth2ClientService {
     }
     
     /**
-     * Store a pending authorization request
-     * @param requestId Unique ID for the request
-     * @param clientId OAuth client ID
-     * @param redirectUri Redirect URI for the client
-     * @param state State parameter for CSRF protection
-     */
-    public void storePendingRequest(String requestId, String clientId, String redirectUri, String state) {
-        pendingRequests.put(requestId, new AuthorizationRequest(clientId, redirectUri, state));
-    }
-    
-    /**
-     * Get a pending authorization request
-     * @param requestId Unique ID for the request
-     * @return The authorization request or null if not found
-     */
-    public AuthorizationRequest getPendingRequest(String requestId) {
-        return pendingRequests.get(requestId);
-    }
-    
-    /**
-     * Remove a pending authorization request
-     * @param requestId Unique ID for the request
-     */
-    public void removePendingRequest(String requestId) {
-        pendingRequests.remove(requestId);
-    }
-    
-    /**
      * Generate an authorization code for a user and client
      * @param user The user authorizing the client
      * @param clientId The OAuth client ID

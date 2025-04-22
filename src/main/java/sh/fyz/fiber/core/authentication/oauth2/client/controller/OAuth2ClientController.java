@@ -11,6 +11,7 @@ import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.authentication.AuthMiddleware;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.entities.OAuth2Client;
+import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
 
 import java.util.HashMap;
@@ -54,11 +55,6 @@ public class OAuth2ClientController {
         // Check if user is authenticated
         UserAuth user = AuthMiddleware.getCurrentUser(request);
         if (user == null) {
-            // Store the authorization request
-            String requestId = UUID.randomUUID().toString();
-            clientService.storePendingRequest(requestId, clientId, redirectUri, state);
-            
-            // Redirect to login page with return URL
             String loginUrl = "/auth/login?return_to=/oauth/authorize?" + request.getQueryString();
             response.setHeader("Location", loginUrl);
             response.setStatus(HttpServletResponse.SC_FOUND);
@@ -80,32 +76,22 @@ public class OAuth2ClientController {
     }
 
     @RequestMapping(value = "/token", method = RequestMapping.Method.POST)
-    public ResponseEntity<?> token(
-            @Param("grant_type") String grantType,
-            @Param("code") String code,
-            @Param("redirect_uri") String redirectUri,
-            @Param("client_id") String clientId,
-            @Param("client_secret") String clientSecret) {
+    public ResponseEntity<?> token(@Param("code") String code, OAuth2ApplicationInfo applicationInfo) {
         
         // Validate client credentials
-        OAuth2Client client = clientService.getClientByCredentials(clientId, clientSecret);
+        OAuth2Client client = clientService.getClientByCredentials(applicationInfo.clientId(), applicationInfo.clientSecret());
         if (client == null || !client.isEnabled()) {
             return ResponseEntity.unauthorized("Invalid client credentials");
         }
 
-        // Validate grant type
-        if (!"authorization_code".equals(grantType)) {
-            return ResponseEntity.badRequest("Unsupported grant type");
-        }
-
         // Validate and exchange authorization code
-        OAuth2ClientService.AuthorizationCode authCode = clientService.validateAuthorizationCode(code, clientId);
+        OAuth2ClientService.AuthorizationCode authCode = clientService.validateAuthorizationCode(code, applicationInfo.clientId());
         if (authCode == null) {
             return ResponseEntity.unauthorized("Invalid authorization code");
         }
 
         // Generate access token
-        String accessToken = clientService.generateAccessToken(authCode.getUser(), clientId);
+        String accessToken = clientService.generateAccessToken(authCode.getUser(), applicationInfo.clientId());
         
         Map<String, String> response = new HashMap<>();
         response.put("access_token", accessToken);
