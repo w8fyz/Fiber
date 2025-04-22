@@ -211,7 +211,7 @@ public class EndpointHandler extends HttpServlet {
         }
 
         // Apply CSRF if not disabled
-        if (shouldApplyCsrf(method) && !req.getMethod().equals("GET")) {
+        if (shouldApplyCsrf(method)) {
             if (!FiberServer.get().getCsrfMiddleware().handle(req, resp)) {
                 return null;
             }
