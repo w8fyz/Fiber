@@ -58,13 +58,15 @@ public class AuthController {
     @RateLimit(attempts = 5, timeout = 15, unit = TimeUnit.MINUTES)
     @AuditLog(action = "LOGIN_ATTEMPT", logParameters = true, maskSensitiveData = true)
     public ResponseEntity<Object> login(
-            @Param("value") String value,
-            @Param("password") String password, 
+            @RequestBody Map<String, String> body,
             HttpServletRequest request,
             HttpServletResponse response) {
+
+        String identifier = body.get("identifier") != null ? body.get("identifier") : "";
+        String password = body.get("password") != null ? body.get("password") : "";
         
         AuthenticationService<?> authService = FiberServer.get().getAuthService();
-        User user = (User) authService.findUserByIdentifer(value);
+        User user = (User) authService.findUserByIdentifer(identifier);
         
         if (user != null && authService.validateCredentials(user, password)) {
             // Set auth cookies
@@ -84,7 +86,7 @@ public class AuthController {
             return ResponseEntity.ok(challenge.asDTO());
         }
         
-        return ResponseEntity.unauthorized(Map.of("error", "Invalid credentials"));
+        return ResponseEntity.unauthorized("Invalid credentials");
     }
 
     @RequestMapping(value = "/oauth/{provider}/login", method = RequestMapping.Method.GET)

@@ -12,8 +12,6 @@ import sh.fyz.fiber.validation.NotBlank;
 @Entity
 @Table(name = "fiber_users")
 public class User implements IdentifiableEntity, UserAuth {
-    @NotBlank
-    private String name;
 
     @Min(value = 0)
     private int age;
@@ -44,15 +42,10 @@ public class User implements IdentifiableEntity, UserAuth {
     // Default constructor for Jackson
     public User() {}
 
-    public User(String name, int age, String email) {
-        this.name = name;
+    public User(int age, String email) {
         this.age = age;
         this.email = email;
     }
-
-    // Getters and setters
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
     @Override
     public Object getId() { return id; }
     public long setId(long id) { return this.id = id; }

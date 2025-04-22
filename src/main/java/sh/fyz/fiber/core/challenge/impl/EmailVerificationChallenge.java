@@ -48,7 +48,7 @@ public class EmailVerificationChallenge extends AbstractChallenge {
             throw new IllegalArgumentException("email is required for email verification challenge");
         }
         
-        return new EmailVerificationChallenge(userId, email, UUID.randomUUID().toString());
+        return new EmailVerificationChallenge(userId, email, "code");
     }
 
     @Override
