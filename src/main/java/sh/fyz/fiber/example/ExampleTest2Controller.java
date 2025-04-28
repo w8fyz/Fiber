@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Controller("/test2")
-public class Test2Controller {
+public class ExampleTest2Controller {
 
     @RequestMapping("/public")
     public ResponseEntity<?> publicEndpoint() {

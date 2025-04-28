@@ -1,10 +1,9 @@
 package sh.fyz.fiber.example;
 
-import nonapi.io.github.classgraph.json.JSONUtils;
 import sh.fyz.fiber.core.security.logging.AuditLog;
 import sh.fyz.fiber.core.security.logging.AuditLogService;
 
-public class LogService extends AuditLogService {
+public class ExampleLogService extends AuditLogService {
 
     @Override
     public void onAuditLog(AuditLog log) {

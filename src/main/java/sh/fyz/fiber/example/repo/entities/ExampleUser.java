@@ -10,8 +10,8 @@ import sh.fyz.fiber.validation.Min;
 import sh.fyz.fiber.validation.NotBlank;
 
 @Entity
-@Table(name = "fiber_users")
-public class User implements IdentifiableEntity, UserAuth {
+@Table(name = "fiber_example_users")
+public class ExampleUser implements IdentifiableEntity, UserAuth {
 
     @Min(value = 0)
     private int age;
@@ -40,9 +40,9 @@ public class User implements IdentifiableEntity, UserAuth {
     private String role;
 
     // Default constructor for Jackson
-    public User() {}
+    public ExampleUser() {}
 
-    public User(int age, String email) {
+    public ExampleUser(int age, String email) {
         this.age = age;
         this.email = email;
     }

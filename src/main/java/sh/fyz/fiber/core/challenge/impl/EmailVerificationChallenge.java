@@ -4,11 +4,10 @@ import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.dto.IgnoreDTO;
 import sh.fyz.fiber.core.challenge.AbstractChallenge;
 import sh.fyz.fiber.core.challenge.Challenge;
-import sh.fyz.fiber.example.email.VerifyMailEmail;
+import sh.fyz.fiber.example.email.ExampleVerifyMailEmail;
 
 import java.time.Instant;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Represents an Email Verification challenge.
@@ -29,7 +28,7 @@ public class EmailVerificationChallenge extends AbstractChallenge {
         addMetadata("verificationToken", verificationToken);
         addMetadata("email", email);
 
-        FiberServer.get().getEmailService().sendEmail(new VerifyMailEmail(email, verificationToken));
+        FiberServer.get().getEmailService().sendEmail(new ExampleVerifyMailEmail(email, verificationToken));
     }
 
     /**

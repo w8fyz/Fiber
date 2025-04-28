@@ -2,8 +2,8 @@ package sh.fyz.fiber.example.repo.entities;
 
 import sh.fyz.fiber.core.authentication.entities.Role;
 
-public class UserRole extends Role {
-    protected UserRole() {
+public class ExampleUserRole extends Role {
+    protected ExampleUserRole() {
         super("user");
     }
 

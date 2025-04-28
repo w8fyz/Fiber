@@ -75,11 +75,11 @@ architect.start();
 ```java
 // Initialiser les services
 AuthService authService = new ImplAuthService(userRepository);
-OAuthService oauthService = new OAuthService(authService, userRepository);
+OAuthService oauthServiceExample = new OAuthService(authService, userRepository);
 
 // Configurer le serveur
 server.setAuthService(authService);
-server.setOAuthService(oauthService);
+server.setOAuthService(oauthServiceExample);
 ```
 
 ### Exemple de contrôleur d'authentification
@@ -111,7 +111,7 @@ public class AuthController {
 - **Usage**: Au niveau de la classe
 - **Exemple**:
 ```java
-@Controller("/api/users")
+@Controller("/api/exampleUsers")
 public class UserController {
     // ...
 }
@@ -127,7 +127,7 @@ public class UserController {
 - **Exemple**:
 ```java
 @RequestMapping(value = "/create", method = RequestMapping.Method.POST)
-public ResponseEntity<User> createUser(@RequestBody User user) {
+public ResponseEntity<User> createUser(@RequestBody User exampleUser) {
     // ...
 }
 ```
@@ -137,7 +137,7 @@ public ResponseEntity<User> createUser(@RequestBody User user) {
 - **Usage**: Au niveau des paramètres de méthode
 - **Exemple**:
 ```java
-@RequestMapping("/user/{id}")
+@RequestMapping("/exampleUser/{id}")
 public User getUser(@PathVariable("id") Long userId) {
     // ...
 }
@@ -160,7 +160,7 @@ public List<User> searchUsers(@Param("query") String searchQuery) {
 - **Exemple**:
 ```java
 @RequestMapping(value = "/update", method = RequestMapping.Method.PUT)
-public User updateUser(@RequestBody User user) {
+public User updateUser(@RequestBody User exampleUser) {
     // ...
 }
 ```
@@ -192,8 +192,8 @@ public ResponseEntity<String> uploadFile(
 - **Exemple**:
 ```java
 @RequestMapping("/profile")
-public User getProfile(@AuthenticatedUser User user) {
-    return user;
+public User getProfile(@AuthenticatedUser User exampleUser) {
+    return exampleUser;
 }
 ```
 

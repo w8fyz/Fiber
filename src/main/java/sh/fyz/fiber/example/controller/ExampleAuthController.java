@@ -20,9 +20,9 @@ import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
 import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
-import sh.fyz.fiber.example.Main;
-import sh.fyz.fiber.example.OAuthService;
-import sh.fyz.fiber.example.repo.entities.User;
+import sh.fyz.fiber.example.ExampleMain;
+import sh.fyz.fiber.example.ExampleOAuthService;
+import sh.fyz.fiber.example.repo.entities.ExampleUser;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -30,27 +30,27 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Controller("/auth")
-public class AuthController {
+public class ExampleAuthController {
     
-    private final OAuthService oauthService;
+    private final ExampleOAuthService oauthServiceExample;
     
-    public AuthController(OAuthService oauthService) {
-        this.oauthService = oauthService;
+    public ExampleAuthController(ExampleOAuthService oauthServiceExample) {
+        this.oauthServiceExample = oauthServiceExample;
     }
 
     @RequestMapping(value = "/register", method = RequestMapping.Method.POST)
     @AuditLog(action = "USER_REGISTRATION", logParameters = true, maskSensitiveData = true)
-    public ResponseEntity<String> register(@RequestBody User user) {
-        User creating = new User();
-        creating.setEmail(user.getEmail());
-        creating.setUsername(user.getUsername());
+    public ResponseEntity<String> register(@RequestBody ExampleUser exampleUser) {
+        ExampleUser creating = new ExampleUser();
+        creating.setEmail(exampleUser.getEmail());
+        creating.setUsername(exampleUser.getUsername());
         creating.setRole("user");
-        UserFieldUtil.setPassword(creating, user.getPassword());
-        boolean exist = FiberServer.get().getAuthService().doesIdentifiersAlreadyExists(user);
+        UserFieldUtil.setPassword(creating, exampleUser.getPassword());
+        boolean exist = FiberServer.get().getAuthService().doesIdentifiersAlreadyExists(exampleUser);
         if(exist) {
             return ResponseEntity.badRequest("User with this identifier already exists");
         }
-        Main.userRepository.save(creating);
+        ExampleMain.exampleUserRepository.save(creating);
         return ResponseEntity.ok("User registered successfully");
     }
 
@@ -66,15 +66,15 @@ public class AuthController {
         String password = body.get("password") != null ? body.get("password") : "";
         
         AuthenticationService<?> authService = FiberServer.get().getAuthService();
-        User user = (User) authService.findUserByIdentifer(identifier);
+        ExampleUser exampleUser = (ExampleUser) authService.findUserByIdentifer(identifier);
         
-        if (user != null && authService.validateCredentials(user, password)) {
+        if (exampleUser != null && authService.validateCredentials(exampleUser, password)) {
             // Set auth cookies
 
-            Challenge challenge = FiberServer.get().getChallengeRegistry().createChallenge("EMAIL_VERIFICATION", Map.of("userId", user.getId(), "email", user.getEmail()), new ChallengeCallback() {
+            Challenge challenge = FiberServer.get().getChallengeRegistry().createChallenge("EMAIL_VERIFICATION", Map.of("userId", exampleUser.getId(), "email", exampleUser.getEmail()), new ChallengeCallback() {
                 @Override
                 public ResponseEntity<Object> onSuccess(Challenge challenge, HttpServletRequest request, HttpServletResponse response) {
-                    authService.setAuthCookies(user, request, response);
+                    authService.setAuthCookies(exampleUser, request, response);
                     return ResponseEntity.ok("Login successful");
                 }
 
@@ -95,11 +95,11 @@ public class AuthController {
             @PathVariable("provider") String provider,
             HttpServletRequest request,
             HttpServletResponse response) throws IOException {
-        OAuth2Provider<User> oauthProvider = oauthService.getProvider(provider);
+        OAuth2Provider<ExampleUser> oauthProvider = oauthServiceExample.getProvider(provider);
         if (oauthProvider != null) {
             String requestUrl = request.getRequestURL().toString();
             String callbackUrl = requestUrl.replace("/login", "/callback");
-            String redirectUrl = oauthService.getAuthorizationUrl(provider, callbackUrl);
+            String redirectUrl = oauthServiceExample.getAuthorizationUrl(provider, callbackUrl);
             response.setHeader("Location", redirectUrl);
             response.setStatus(HttpServletResponse.SC_FOUND);
         } else {
@@ -116,8 +116,8 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response) throws IOException {
         try {
-            User user = oauthService.handleCallback(code, state, request.getRequestURL().toString(), request, response);
-            if (user != null) {
+            ExampleUser exampleUser = oauthServiceExample.handleCallback(code, state, request.getRequestURL().toString(), request, response);
+            if (exampleUser != null) {
                 Map<String, String> tokens = new HashMap<>();
                 tokens.put("token_type", "Bearer");
                 tokens.put("expires_in", "3600");
