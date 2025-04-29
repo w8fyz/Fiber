@@ -54,7 +54,7 @@ public class FiberServer {
     private final RoleRegistry roleRegistry;
     private final ChallengeRegistry challengeRegistry;
     private final AuthResolver authResolver;
-    private final CsrfMiddleware csrfMiddleware;
+    private CsrfMiddleware csrfMiddleware;
     private CorsService corsService;
     private final BasicAuthenticator basicAuthenticator;
 
@@ -79,7 +79,6 @@ public class FiberServer {
         this.roleRegistry = new RoleRegistry();
         this.challengeRegistry = new ChallengeRegistry();
         this.authResolver = new AuthResolver();
-        this.csrfMiddleware = new CsrfMiddleware();
         this.corsService = new CorsService();
         this.basicAuthenticator = new BasicAuthenticator();
 
@@ -241,7 +240,7 @@ public class FiberServer {
     }
 
     public void enableCSRFProtection() {
-        addMiddleware(new CsrfMiddleware());
+        this.csrfMiddleware = new CsrfMiddleware();
         registerController(new CsrfController());
     }
 
