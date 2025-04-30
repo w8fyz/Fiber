@@ -72,6 +72,8 @@ public abstract class AuthenticationService<T extends UserAuth> {
 
     public void setAuthCookies(UserAuth user, HttpServletRequest request, HttpServletResponse response) {
         String accessToken = generateToken(user, request);
+        System.out.println("Generated token :");
+        System.out.println(accessToken);
         String refreshToken = JwtUtil.generateRefreshToken(user, getClientIpAddress(request), request.getHeader("User-Agent"));
         
         // Set access token cookie

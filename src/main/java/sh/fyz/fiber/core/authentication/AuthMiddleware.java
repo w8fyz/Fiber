@@ -9,13 +9,12 @@ import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 
 /**
- * Middleware for handling authentication using cookies.
+ * Middleware for handling authentication.
  */
 public class AuthMiddleware {
     private static final String USER_ID_ATTRIBUTE = "userId";
 
     public static boolean process(HttpServletRequest req, HttpServletResponse resp) {
-        // First check CSRF token
 
         Cookie[] cookies = req.getCookies();
         String token = null;
@@ -42,6 +41,7 @@ public class AuthMiddleware {
 
             // Extract user info from token
             Object userId = JwtUtil.extractId(token);
+            System.out.println("Extracted user ID: " + userId);
             req.setAttribute(USER_ID_ATTRIBUTE, userId);
 
             return true;
@@ -66,6 +66,7 @@ public class AuthMiddleware {
      * Get the current user ID from the request attributes
      */
     public static Object getCurrentUserId(HttpServletRequest req) {
+        System.out.println("Getting current user ID from request attributes: " + req.getAttribute(USER_ID_ATTRIBUTE));
         return req.getAttribute(USER_ID_ATTRIBUTE);
     }
 } 

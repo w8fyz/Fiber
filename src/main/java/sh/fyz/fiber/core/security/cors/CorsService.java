@@ -50,10 +50,6 @@ public class CorsService {
     }
 
     public boolean isOriginAllowed(String origin) {
-        System.out.println("========");
-        System.out.println("Checking if origin is allowed: " + origin);
-        System.out.println("Allowed Origins: " + String.join(", ", allowedOrigins));
-        System.out.println("========");
 
         if (origin == null && FiberServer.get().isDev()) {
             return true;

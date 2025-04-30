@@ -7,6 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -106,6 +107,19 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
             String requestBody = String.format("grant_type=authorization_code&code=%s&redirect_uri=%s",
                 URLEncoder.encode(code, StandardCharsets.UTF_8),
                 URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));
+
+
+
+            System.out.println("Redirect URI : "+redirectUri);
+            System.out.println("Encoded Redirect URI : "+URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));
+            for(String expect : Arrays.asList("https://nocta.li/auth/oauth/discord/callback"
+            , "http://localhost:5050/auth/oauth/discord/callback", "http://localhost:3001/auth/oauth/discord/callback")) {
+                System.out.println("Trying : "+expect);
+                System.out.println("Classic : "+expect.equals(redirectUri));
+                System.out.println("Encoded : "+URLEncoder.encode(redirectUri, StandardCharsets.UTF_8).equals(expect));
+            }
+
+
 
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(java.net.URI.create(tokenEndpoint))

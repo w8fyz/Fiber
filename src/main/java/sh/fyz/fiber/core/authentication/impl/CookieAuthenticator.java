@@ -25,7 +25,11 @@ public class CookieAuthenticator implements Authenticator {
                 if (ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
                     String token = cookie.getValue();
                     if (JwtUtil.validateToken(token, request.getRemoteAddr(), request.getHeader("User-Agent"))) {
-                        return FiberServer.get().getAuthService().getUserById(AuthMiddleware.getCurrentUserId(request));
+                        Object userId = JwtUtil.extractId(token);
+                        System.out.println("Cookie auth userID got : "+userId);
+                        request.setAttribute("userId", userId);
+
+                        return FiberServer.get().getAuthService().getUserById(userId);
                     }
                     break;
                 }
