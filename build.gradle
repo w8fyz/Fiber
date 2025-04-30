@@ -22,7 +22,7 @@ publishing {
         maven(MavenPublication) {
             groupId = "sh.fyz"
             artifactId = "fiber"
-            version = "0.0.4"
+            version = "0.0.6"
 
             artifact shadowJar // Publish the fat jar instead of the normal jar
         }
@@ -31,6 +31,14 @@ publishing {
 
 repositories {
     mavenCentral()
+    maven {
+        name "zoxouuRepositoryPrivate"
+        url "https://repo.zoxouu.me/private"
+        credentials(PasswordCredentials)
+        authentication {
+            basic(BasicAuthentication)
+        }
+    }
     maven {
         url 'https://repo.freshperf.fr/repository/freshperf/'
         credentials {
@@ -43,7 +51,6 @@ repositories {
 dependencies {
     implementation 'org.postgresql:postgresql:42.1.4'
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-
     // Jetty Server
     implementation 'org.eclipse.jetty:jetty-server:11.0.15'
     implementation 'org.eclipse.jetty:jetty-servlet:11.0.15'
@@ -83,13 +90,11 @@ java {
 }
 
 shadowJar {
-    archiveClassifier.set('') // << Remove the '-all' suffix
+    archiveClassifier.set('')
     manifest {
         attributes(
                 'Main-Class': 'sh.fyz.fiber.FiberServer'
         )
     }
 }
-
-// Make sure publish depends on shadowJar (build fat jar before publishing)
 publish.dependsOn shadowJar

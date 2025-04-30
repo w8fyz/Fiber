@@ -23,6 +23,10 @@ public class DiscordOAuth2Provider<T extends UserAuth> extends AbstractOAuth2Pro
      * @param clientId The Discord application client ID
      * @param clientSecret The Discord application client secret
      */
+    public DiscordOAuth2Provider(String clientId, String clientSecret, String scopes) {
+        super(clientId, clientSecret, AUTHORIZATION_ENDPOINT, TOKEN_ENDPOINT, USER_INFO_ENDPOINT, scopes);
+    }
+
     public DiscordOAuth2Provider(String clientId, String clientSecret) {
         super(clientId, clientSecret, AUTHORIZATION_ENDPOINT, TOKEN_ENDPOINT, USER_INFO_ENDPOINT, DEFAULT_SCOPE);
     }
@@ -45,8 +49,6 @@ public class DiscordOAuth2Provider<T extends UserAuth> extends AbstractOAuth2Pro
     
     @Override
     public void mapUserData(Map<String, Object> userInfo, T user) {
-        // This method should be implemented by subclasses to map Discord-specific user data
-        // to the application's user entity
         throw new UnsupportedOperationException(
             "This is a base class. Implement a subclass with your specific user type to map Discord user data.");
     }
