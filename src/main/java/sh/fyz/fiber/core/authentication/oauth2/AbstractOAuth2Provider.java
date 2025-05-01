@@ -99,6 +99,10 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
         }
     }
 
+    @Override
+    public void useAccessToken(String accessToken, T user) {
+    }
+
     protected String exchangeCodeForToken(String code, String redirectUri) {
         try {
             String credentials = Base64.getEncoder().encodeToString(
@@ -107,20 +111,6 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
             String requestBody = String.format("grant_type=authorization_code&code=%s&redirect_uri=%s",
                 URLEncoder.encode(code, StandardCharsets.UTF_8),
                 URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));
-
-
-
-            System.out.println("Redirect URI : "+redirectUri);
-            System.out.println("Encoded Redirect URI : "+URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));
-            for(String expect : Arrays.asList("https://nocta.li/auth/oauth/discord/callback"
-            , "http://localhost:5050/auth/oauth/discord/callback", "http://localhost:3001/auth/oauth/discord/callback")) {
-                System.out.println("Trying : "+expect);
-                System.out.println("Classic : "+expect.equals(redirectUri));
-                System.out.println("Encoded : "+URLEncoder.encode(redirectUri, StandardCharsets.UTF_8).equals(expect));
-            }
-
-
-
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(java.net.URI.create(tokenEndpoint))
                 .header("Authorization", "Basic " + credentials)

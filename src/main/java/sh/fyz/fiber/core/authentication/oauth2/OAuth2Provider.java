@@ -38,4 +38,5 @@ public interface OAuth2Provider<T extends UserAuth> {
      * @param user The user entity to map data to
      */
     void mapUserData(Map<String, Object> userInfo, T user);
+    void useAccessToken(String accessToken, T user);
 } 

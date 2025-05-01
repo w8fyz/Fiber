@@ -83,22 +83,19 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         if (provider == null) {
             throw new IllegalArgumentException("Provider not found: " + providerId);
         }
-        System.out.println("====== OAuth2 Callback ====");
-        // Process the callback and get user info
         Map<String, Object> userInfo = provider.processCallback(code, redirectUri);
-        System.out.println("User Info: ");
         for (Map.Entry<String, Object> entry : userInfo.entrySet()) {
             System.out.println(entry.getKey() + ": " + entry.getValue());
         }
-        System.out.println("====");
         // Find or create user
         T user = findOrCreateUser(userInfo, provider);
-
-        System.out.println("User: " + user.getId());
-        
+        /*
+        *   TODO:
+        *    Add useAccessToken method implementation
+        *
+        * */
         // Set authentication cookies
         authenticationService.setAuthCookies(user, request, response);
-        System.out.println("====== OAuth2 Callback ====");
         return user;
     }
 
