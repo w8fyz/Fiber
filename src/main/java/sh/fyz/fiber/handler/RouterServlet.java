@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.ResponseEntity;
+import sh.fyz.fiber.core.security.processors.PermissionProcessor;
 import sh.fyz.fiber.core.security.processors.RateLimitProcessor;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.security.logging.AuditLogProcessor;
@@ -26,12 +27,9 @@ public class RouterServlet extends HttpServlet {
         try {
             String requestUri = req.getRequestURI();
             String requestMethod = req.getMethod();
-            
-            System.out.println("Received " + requestMethod + " request for: " + requestUri);
 
             // Gérer CORS en premier
             if (requestMethod.equals("OPTIONS")) {
-                System.out.println("Processing OPTIONS request");
                 FiberServer.get().getCorsService().handlePreflightRequest(req, resp);
                 return;
             }
@@ -40,7 +38,6 @@ public class RouterServlet extends HttpServlet {
             // Si l'origine n'est pas autorisée, configureCorsHeaders renverra un 403
             FiberServer.get().getCorsService().configureCorsHeaders(req, resp);
             if (resp.getStatus() == HttpServletResponse.SC_FORBIDDEN) {
-                System.out.println("CORS check failed - unauthorized origin ("+req.getHeader("Origin")+")");
                 return;
             }
 
@@ -68,7 +65,6 @@ public class RouterServlet extends HttpServlet {
             }
             
             if (matchedEndpoint == null) {
-                System.out.println("No matching endpoint found for: " + requestUri);
                 resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
@@ -77,6 +73,14 @@ public class RouterServlet extends HttpServlet {
             Object[] parameters = matchedEndpoint.getParameters();
 
             // Check rate limit before processing
+
+            Object permissionResult = PermissionProcessor.process(method, parameters, req);
+            if (permissionResult != null) {
+                ResponseEntity<?> response = (ResponseEntity<?>) permissionResult;
+                response.write(req, resp);
+                return;
+            }
+
             Object rateLimitResult = RateLimitProcessor.process(method, parameters, req);
             if (rateLimitResult != null) {
                 ResponseEntity<?> response = (ResponseEntity<?>) rateLimitResult;
