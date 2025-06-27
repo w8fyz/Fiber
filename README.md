@@ -24,11 +24,7 @@ Fiber est un framework Java moderne et élégant pour la création d'APIs RESTfu
 ## 🚀 Installation
 
 ```xml
-<dependency>
-    <groupId>sh.fyz</groupId>
-    <artifactId>fiber</artifactId>
-    <version>1.0.0</version>
-</dependency>
+*Coming soon*
 ```
 
 ## 🎯 Démarrage rapide
