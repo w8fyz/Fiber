@@ -20,6 +20,7 @@ import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.entities.Role;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
+import sh.fyz.fiber.core.security.processors.PermissionProcessor;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.util.JsonUtil;
 import sh.fyz.fiber.handler.parameter.ParameterHandler;
@@ -236,6 +237,8 @@ public class EndpointHandler extends HttpServlet {
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
                 return null;
             }
+            // Store the authenticated user ID in request attributes for PermissionProcessor
+            req.setAttribute("userId", authenticatedUser.getId());
         }
 
         // Execute global middleware
@@ -283,6 +286,13 @@ public class EndpointHandler extends HttpServlet {
                         return null;
                     }
                 }
+            }
+
+            Object permissionResult = PermissionProcessor.process(method, null, req);
+            if (permissionResult != null) {
+                ResponseEntity<?> response = (ResponseEntity<?>) permissionResult;
+                response.write(req, resp);
+                return null;
             }
 
             // Invoke the method

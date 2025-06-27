@@ -6,7 +6,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.ResponseEntity;
-import sh.fyz.fiber.core.security.processors.PermissionProcessor;
 import sh.fyz.fiber.core.security.processors.RateLimitProcessor;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.security.logging.AuditLogProcessor;
@@ -73,13 +72,6 @@ public class RouterServlet extends HttpServlet {
             Object[] parameters = matchedEndpoint.getParameters();
 
             // Check rate limit before processing
-
-            Object permissionResult = PermissionProcessor.process(method, parameters, req);
-            if (permissionResult != null) {
-                ResponseEntity<?> response = (ResponseEntity<?>) permissionResult;
-                response.write(req, resp);
-                return;
-            }
 
             Object rateLimitResult = RateLimitProcessor.process(method, parameters, req);
             if (rateLimitResult != null) {
