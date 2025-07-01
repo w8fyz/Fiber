@@ -10,6 +10,7 @@ import java.util.List;
 
 public class CorsService {
     private List<String> allowedOrigins = new ArrayList<>();
+    private boolean allowNullOrigin = false;
     private List<String> allowedMethods = Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS");
     private List<String> allowedHeaders = Arrays.asList("Content-Type", "Authorization");
     private boolean allowCredentials = true;
@@ -17,6 +18,11 @@ public class CorsService {
 
     public CorsService() {
         // Par défaut, n'accepte aucune origine
+    }
+
+    public CorsService allowNullOrigin() {
+        this.allowNullOrigin = true;
+        return this;
     }
 
     public CorsService addAllowedOrigin(String origin) {
@@ -51,7 +57,7 @@ public class CorsService {
 
     public boolean isOriginAllowed(String origin) {
 
-        if (origin == null && FiberServer.get().isDev()) {
+        if (origin == null && allowNullOrigin) {
             return true;
         }
         
@@ -83,7 +89,7 @@ public class CorsService {
 
     public void configureCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
         String origin = request.getHeader("Origin");
-        if ((origin != null || FiberServer.get().isDev()) && isOriginAllowed(origin)) {
+        if (isOriginAllowed(origin)) {
             // Si credentials sont autorisés, on doit spécifier l'origine exacte
             if (allowCredentials) {
                 response.setHeader("Access-Control-Allow-Origin", origin);

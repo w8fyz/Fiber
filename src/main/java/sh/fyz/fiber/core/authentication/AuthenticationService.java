@@ -3,6 +3,7 @@ package sh.fyz.fiber.core.authentication;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
@@ -72,29 +73,27 @@ public abstract class AuthenticationService<T extends UserAuth> {
 
     public void setAuthCookies(UserAuth user, HttpServletRequest request, HttpServletResponse response) {
         String accessToken = generateToken(user, request);
-        System.out.println("Generated token :");
-        System.out.println(accessToken);
         String refreshToken = JwtUtil.generateRefreshToken(user, getClientIpAddress(request), request.getHeader("User-Agent"));
         
         // Set access token cookie
         response.addHeader("Set-Cookie", 
             "access_token=" + accessToken + 
-            "; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600");
+            "; HttpOnly; "+(FiberServer.get().isDev() ? "SameSite=Lax;" : "Secure; SameSite=Strict;")+" Path=/; Max-Age=3600");
         
         // Set refresh token cookie
         response.addHeader("Set-Cookie", 
             "refresh_token=" + refreshToken + 
-            "; HttpOnly; Secure; SameSite=Strict; Path=" + refreshTokenPath + "; Max-Age=604800");
+            "; HttpOnly; "+(FiberServer.get().isDev() ? "SameSite=Lax;" : "Secure; SameSite=Strict;")+" Path=" + refreshTokenPath + "; Max-Age=604800");
     }
 
     public void clearAuthCookies(HttpServletResponse response) {
         // Clear access token cookie
         response.addHeader("Set-Cookie", 
-            "access_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0");
+            "access_token=; "+(FiberServer.get().isDev() ? "SameSite=Lax;" : "Secure; SameSite=Strict;")+" Path=/; Max-Age=0");
         
         // Clear refresh token cookie
         response.addHeader("Set-Cookie", 
-            "refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=" + refreshTokenPath + "; Max-Age=0");
+            "refresh_token=; HttpOnly; "+(FiberServer.get().isDev() ? "SameSite=Lax;" : "Secure; SameSite=Strict;")+" Path=" + refreshTokenPath + "; Max-Age=0");
     }
 
 
