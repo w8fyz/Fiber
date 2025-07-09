@@ -20,6 +20,7 @@ public abstract class AuthenticationService<T extends UserAuth> {
     private static final int MAX_LOGIN_ATTEMPTS = 5;
     private static final int LOGIN_TIMEOUT_MINUTES = 15;
     private String refreshTokenPath = "/auth";
+    private final AuthCookieConfig cookieConfig;
 
 
 
@@ -31,6 +32,22 @@ public abstract class AuthenticationService<T extends UserAuth> {
     public AuthenticationService(GenericRepository<T> userRepository, String authEndpoint) {
         this.userRepository = userRepository;
         this.refreshTokenPath = authEndpoint;
+        // Default configuration for backward compatibility
+        this.cookieConfig = new AuthCookieConfig()
+                .setSameSite(FiberServer.get().isDev() ? SameSitePolicy.LAX : SameSitePolicy.STRICT)
+                .setSecure(!FiberServer.get().isDev());
+    }
+
+    /*
+        * Constructor for AuthenticationService with custom cookie configuration
+        * @param userRepository The repository for user data
+        * @param authEndpoint The generic endpoint for authentication, used to generate the refresh token path
+        * @param cookieConfig Configuration for authentication cookies
+     */
+    public AuthenticationService(GenericRepository<T> userRepository, String authEndpoint, AuthCookieConfig cookieConfig) {
+        this.userRepository = userRepository;
+        this.refreshTokenPath = authEndpoint;
+        this.cookieConfig = cookieConfig;
     }
 
     public Class<T> getUserClass() {
@@ -77,23 +94,35 @@ public abstract class AuthenticationService<T extends UserAuth> {
         
         // Set access token cookie
         response.addHeader("Set-Cookie", 
-            "access_token=" + accessToken + 
-            "; HttpOnly; "+(FiberServer.get().isDev() ? "SameSite=Lax;" : "Secure; SameSite=Strict;")+" Path=/; Max-Age=3600");
+            "access_token=" + accessToken + cookieConfig.buildCookieAttributesWithMaxAge(cookieConfig.getAccessTokenMaxAge()));
         
-        // Set refresh token cookie
+        // Set refresh token cookie with refresh token path
+        AuthCookieConfig refreshCookieConfig = new AuthCookieConfig()
+                .setSameSite(cookieConfig.getSameSite())
+                .setSecure(cookieConfig.isSecure())
+                .setHttpOnly(cookieConfig.isHttpOnly())
+                .setDomain(cookieConfig.getDomain())
+                .setPath(refreshTokenPath);
+        
         response.addHeader("Set-Cookie", 
-            "refresh_token=" + refreshToken + 
-            "; HttpOnly; "+(FiberServer.get().isDev() ? "SameSite=Lax;" : "Secure; SameSite=Strict;")+" Path=" + refreshTokenPath + "; Max-Age=604800");
+            "refresh_token=" + refreshToken + refreshCookieConfig.buildCookieAttributesWithMaxAge(cookieConfig.getRefreshTokenMaxAge()));
     }
 
     public void clearAuthCookies(HttpServletResponse response) {
         // Clear access token cookie
         response.addHeader("Set-Cookie", 
-            "access_token=; "+(FiberServer.get().isDev() ? "SameSite=Lax;" : "Secure; SameSite=Strict;")+" Path=/; Max-Age=0");
+            "access_token=" + cookieConfig.buildCookieAttributesWithMaxAge(0));
         
-        // Clear refresh token cookie
+        // Clear refresh token cookie with refresh token path
+        AuthCookieConfig refreshCookieConfig = new AuthCookieConfig()
+                .setSameSite(cookieConfig.getSameSite())
+                .setSecure(cookieConfig.isSecure())
+                .setHttpOnly(cookieConfig.isHttpOnly())
+                .setDomain(cookieConfig.getDomain())
+                .setPath(refreshTokenPath);
+        
         response.addHeader("Set-Cookie", 
-            "refresh_token=; HttpOnly; "+(FiberServer.get().isDev() ? "SameSite=Lax;" : "Secure; SameSite=Strict;")+" Path=" + refreshTokenPath + "; Max-Age=0");
+            "refresh_token=" + refreshCookieConfig.buildCookieAttributesWithMaxAge(0));
     }
 
 
