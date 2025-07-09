@@ -90,8 +90,8 @@ public class ExampleMain {
         // Start the server
         server.start();
         
-        System.out.println("Server started on http://localhost:9090");
-        System.out.println("API Documentation available at http://localhost:9090/docs/ui");
-        System.out.println("Raw API Documentation available at http://localhost:9090/docs/api");
+        //System.out.println("Server started on http://localhost:9090");
+        //System.out.println("API Documentation available at http://localhost:9090/docs/ui");
+        //System.out.println("Raw API Documentation available at http://localhost:9090/docs/api");
     }
 } 

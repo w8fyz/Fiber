@@ -20,7 +20,7 @@ public class AuthResolver {
 
     public UserAuth resolveUser(HttpServletRequest request, Set<AuthScheme> accepted) {
         if(authenticators.isEmpty()) {
-            System.out.println("WARNING: No authenticators registered. Please register at least one authenticator.");
+            //System.out.println("WARNING: No authenticators registered. Please register at least one authenticator.");
         }
         if (accepted == null || accepted.isEmpty()) {
             return null;

@@ -36,7 +36,7 @@ public class RoleRegistry {
             // Create and store the role instance
             roles.put(identifier, role);
             
-            System.out.println("Registered role: " + identifier);
+            //System.out.println("Registered role: " + identifier);
         } catch (Exception e) {
             throw new RuntimeException("Failed to register role class: " + roleClass.getName(), e);
         }

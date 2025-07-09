@@ -41,7 +41,7 @@ public class AuthMiddleware {
 
             // Extract user info from token
             Object userId = JwtUtil.extractId(token);
-            System.out.println("Extracted user ID: " + userId);
+            //System.out.println("Extracted user ID: " + userId);
             req.setAttribute(USER_ID_ATTRIBUTE, userId);
 
             return true;
@@ -66,7 +66,7 @@ public class AuthMiddleware {
      * Get the current user ID from the request attributes
      */
     public static Object getCurrentUserId(HttpServletRequest req) {
-        System.out.println("Getting current user ID from request attributes: " + req.getAttribute(USER_ID_ATTRIBUTE));
+        //System.out.println("Getting current user ID from request attributes: " + req.getAttribute(USER_ID_ATTRIBUTE));
         return req.getAttribute(USER_ID_ATTRIBUTE);
     }
 } 

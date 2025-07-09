@@ -30,7 +30,7 @@ public class JwtUtil {
      * @return The generated JWT token
      */
     public static String generateToken(UserAuth userAuth, String ipAddress, String userAgent) {
-        System.out.println("---- JWT --");
+        //System.out.println("---- JWT --");
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userAuth.getId());
         claims.put("ip", ipAddress);
@@ -38,9 +38,9 @@ public class JwtUtil {
         claims.put("type", "access");
 
         for(Map.Entry<String, Object> c : claims.entrySet()) {
-            System.out.println(c.getKey() + ": " + c.getValue());
+            //System.out.println(c.getKey() + ": " + c.getValue());
         }
-        System.out.println("---- JWT --");
+        //System.out.println("---- JWT --");
         return createToken(claims, TOKEN_VALIDITY);
     }
 

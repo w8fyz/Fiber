@@ -85,7 +85,7 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         }
         Map<String, Object> userInfo = provider.processCallback(code, redirectUri);
         for (Map.Entry<String, Object> entry : userInfo.entrySet()) {
-            System.out.println(entry.getKey() + ": " + entry.getValue());
+            //System.out.println(entry.getKey() + ": " + entry.getValue());
         }
         // Find or create user
         T user = findOrCreateUser(userInfo, provider);

@@ -60,28 +60,28 @@ public class RateLimitInterceptor {
         if (rateLimit == null) {
             return;
         }
-        System.out.println("PUMP");
+        //System.out.println("PUMP");
         for (AttemptInfo attemptInfo : attempts.values()) {
-            System.out.println(attemptInfo);
+            //System.out.println(attemptInfo);
         }
-        System.out.println("EPUMP");
-        System.out.println("Checking RATELIMIT : ");
+        //System.out.println("EPUMP");
+        //System.out.println("Checking RATELIMIT : ");
         String cacheKey = key + ":" + method.getDeclaringClass().getName() + ":" + method.getName();
-        System.out.println("Cache Key: " + cacheKey);
+        //System.out.println("Cache Key: " + cacheKey);
         attempts.compute(cacheKey, (k, info) -> {
             if (info == null) {
-                System.out.println("Creating new AttemptInfo for key: " + k);
+                //System.out.println("Creating new AttemptInfo for key: " + k);
                 AttemptInfo newInfo = new AttemptInfo(rateLimit);
-                System.out.println(newInfo);
+                //System.out.println(newInfo);
                 return newInfo;
             }
-            System.out.println("Current Attempts: " + info.count);
+            //System.out.println("Current Attempts: " + info.count);
             
             info.resetIfExpired();
             info.increment();
             
             if (info.isExceeded()) {
-                System.out.println("Exceeded Rate Limit: " + info.count);
+                //System.out.println("Exceeded Rate Limit: " + info.count);
                 throw new RateLimitExceededException(rateLimit.message());
             }
             

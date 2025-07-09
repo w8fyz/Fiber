@@ -102,7 +102,7 @@ public class FiberServer {
     }
 
     public void enableDevelopmentMode() {
-        System.out.println("Development mode enabled");
+        //System.out.println("Development mode enabled");
         this.isDev = true;
     }
 
@@ -118,7 +118,7 @@ public class FiberServer {
     }
 
     public void setCorsService(CorsService corsService) {
-        System.out.println("Setting CORS service: " + corsService);
+        //System.out.println("Setting CORS service: " + corsService);
         this.corsService = corsService;
     }
 
@@ -295,7 +295,7 @@ public class FiberServer {
         context.addServlet(holder, "/*");
         context.setErrorHandler(new FiberErrorHandler());
         server.start();
-        System.out.println("WARNING: This server is running in development mode. Do not use in production.");
+        //System.out.println("WARNING: This server is running in development mode. Do not use in production.");
     }
 
     public void stop() throws Exception {

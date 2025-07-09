@@ -118,7 +118,7 @@ public class EndpointHandler extends HttpServlet {
 
     @Override
     protected void doPut(HttpServletRequest req, HttpServletResponse resp) {
-        System.out.println("POST DETECTED");
+        //System.out.println("POST DETECTED");
         if (method.isAnnotationPresent(RequestMapping.class)) {
             RequestMapping mapping = method.getAnnotation(RequestMapping.class);
             if (mapping.method() == RequestMapping.Method.PUT) {
@@ -151,12 +151,12 @@ public class EndpointHandler extends HttpServlet {
 
     @Override
     protected void doOptions(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        System.out.println("Handling OPTIONS request");
+        //System.out.println("Handling OPTIONS request");
         // Execute global middleware (which includes CORS)
         List<Middleware> sortedMiddleware = new ArrayList<>(globalMiddleware);
         Collections.sort(sortedMiddleware, Comparator.comparingInt(Middleware::priority));
         for (Middleware middleware : sortedMiddleware) {
-            System.out.println("Executing middleware for OPTIONS: " + middleware.getClass().getSimpleName());
+            //System.out.println("Executing middleware for OPTIONS: " + middleware.getClass().getSimpleName());
             if (!middleware.handle(req, resp)) {
                 return;
             }
@@ -242,12 +242,12 @@ public class EndpointHandler extends HttpServlet {
         }
 
         // Execute global middleware
-        System.out.println("EXECUTE GLOBAL MIDDLEWARES");
+        //System.out.println("EXECUTE GLOBAL MIDDLEWARES");
         List<Middleware> sortedMiddleware = new ArrayList<>(globalMiddleware);
-        System.out.println("Size : " + sortedMiddleware.size());
+        //System.out.println("Size : " + sortedMiddleware.size());
         Collections.sort(sortedMiddleware, Comparator.comparingInt(Middleware::priority));
         for (Middleware middleware : sortedMiddleware) {
-            System.out.println("Executing middleware: " + middleware.getClass().getSimpleName());
+            //System.out.println("Executing middleware: " + middleware.getClass().getSimpleName());
             if (!middleware.handle(req, resp)) {
                 return null;
             }
@@ -257,7 +257,7 @@ public class EndpointHandler extends HttpServlet {
         String path = req.getRequestURI();
         Matcher matcher = pathPattern.matcher(path);
         if (!matcher.matches()) {
-            System.out.println("Path not found: " + path);
+            //System.out.println("Path not found: " + path);
             ErrorResponse.send(resp, path, HttpServletResponse.SC_NOT_FOUND, "Path not found");
             return null;
         }
@@ -332,7 +332,7 @@ public class EndpointHandler extends HttpServlet {
         if (matches) {
             // Log the captured path variables
             for (String varName : pathVariableNames) {
-                System.out.println("  Path variable '" + varName + "': " + matcher.group(varName));
+                //System.out.println("  Path variable '" + varName + "': " + matcher.group(varName));
             }
         }
         return matches;

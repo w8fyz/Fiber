@@ -58,7 +58,7 @@ public class EndpointRegistry {
         // Use a composite key of path and HTTP method
         String key = path + ":" + httpMethod;
         if (endpoints.containsKey(key)) {
-            System.out.println("Endpoint already registered: " + key);
+            //System.out.println("Endpoint already registered: " + key);
             return; // Skip if endpoint is already registered
         }
         endpoints.put(key, new EndpointHandler(controllerInstance, method, globalMiddleware, requiredRoles));

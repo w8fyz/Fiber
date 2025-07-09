@@ -90,10 +90,10 @@ public class DocumentationController {
 
     @RequestMapping(value = "/ui", method = RequestMapping.Method.GET)
     public ResponseEntity<byte[]> getUI(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        System.out.println("Loading index.html...");
+        //System.out.println("Loading index.html...");
         byte[] content = readResource("docs/index.html");
         if (content != null) {
-            System.out.println("Found index.html, size: " + content.length);
+            //System.out.println("Found index.html, size: " + content.length);
             ResponseEntity<byte[]> responseEntity = ResponseEntity.ok(content);
             responseEntity.contentType("text/html");
             return responseEntity;
@@ -110,10 +110,10 @@ public class DocumentationController {
             return ResponseEntity.notFound();
         }
         path = path.substring(1);
-        System.out.println("Loading CSS: " + path);
+        //System.out.println("Loading CSS: " + path);
         byte[] content = readResource(path);
         if (content != null) {
-            System.out.println("Found CSS file, size: " + content.length);
+            //System.out.println("Found CSS file, size: " + content.length);
             ResponseEntity<byte[]> responseEntity = ResponseEntity.ok(content);
             responseEntity.contentType("text/css");
             return responseEntity;
@@ -130,10 +130,10 @@ public class DocumentationController {
             return ResponseEntity.notFound();
         }
         path = path.substring(1);
-        System.out.println("Loading JS: " + path);
+        //System.out.println("Loading JS: " + path);
         byte[] content = readResource(path);
         if (content != null) {
-            System.out.println("Found JS file, size: " + content.length);
+            //System.out.println("Found JS file, size: " + content.length);
             ResponseEntity<byte[]> responseEntity = ResponseEntity.ok(content);
             responseEntity.contentType("application/javascript");
             return responseEntity;
@@ -145,14 +145,14 @@ public class DocumentationController {
 
     private byte[] readResource(String resourcePath) {
         try {
-            System.out.println("Attempting to load resource: " + resourcePath);
+            //System.out.println("Attempting to load resource: " + resourcePath);
             InputStream inputStream = getClass().getClassLoader().getResourceAsStream(resourcePath);
             if (inputStream == null) {
                 System.err.println("Resource not found: " + resourcePath);
                 return null;
             }
             byte[] content = inputStream.readAllBytes();
-            System.out.println("Successfully loaded resource: " + resourcePath + ", size: " + content.length);
+            //System.out.println("Successfully loaded resource: " + resourcePath + ", size: " + content.length);
             return content;
         } catch (IOException e) {
             System.err.println("Error reading resource: " + resourcePath);
