@@ -7,45 +7,8 @@ plugins {
 group = 'sh.fyz'
 version = '1.0-SNAPSHOT'
 
-publishing {
-    repositories {
-        maven {
-            name "zoxouuRepositoryPrivate"
-            url "https://repo.zoxouu.me/private"
-            credentials(PasswordCredentials)
-            authentication {
-                basic(BasicAuthentication)
-            }
-        }
-    }
-    publications {
-        maven(MavenPublication) {
-            groupId = "sh.fyz"
-            artifactId = "fiber"
-            version = "0.0.6"
-
-            artifact shadowJar // Publish the fat jar instead of the normal jar
-        }
-    }
-}
-
 repositories {
     mavenCentral()
-    maven {
-        name "zoxouuRepositoryPrivate"
-        url "https://repo.zoxouu.me/private"
-        credentials(PasswordCredentials)
-        authentication {
-            basic(BasicAuthentication)
-        }
-    }
-    maven {
-        url 'https://repo.freshperf.fr/repository/freshperf/'
-        credentials {
-            username = 'dev'
-            password = 't_238k[~e75\')6HA+|'
-        }
-    }
 }
 
 dependencies {
@@ -76,8 +39,6 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
 
     implementation 'org.mindrot:jbcrypt:0.4'
-
-    implementation 'sh.fyz:yellowconfig:1.0@jar'
 }
 
 test {

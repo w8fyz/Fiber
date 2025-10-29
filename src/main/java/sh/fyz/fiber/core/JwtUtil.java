@@ -11,15 +11,16 @@ import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.function.Function;
 
 /**
  * Utility class for handling JWT (JSON Web Token) operations.
  */
 public class JwtUtil {
-    private static final String SECRET_KEY = FiberServer.get().getConfig().getJwtSecretKey();
-    private static final long TOKEN_VALIDITY = FiberServer.get().getConfig().getJwtTokenValidity();
-    private static final long REFRESH_TOKEN_VALIDITY = FiberServer.get().getConfig().getJwtRefreshTokenValidity();
+    private static final String SECRET_KEY = System.getenv("FIBER_SECRET_KEY") != null ? System.getenv("FIBER_SECRET_KEY") : FiberServer.get().getConfig().getJwtSecretKey();
+    private static final long TOKEN_VALIDITY = System.getenv("FIBER_TOKEN_VALIDITY") != null ? Long.parseLong(System.getenv("FIBER_TOKEN_VALIDITY")) : FiberServer.get().getConfig().getJwtTokenValidity();
+    private static final long REFRESH_TOKEN_VALIDITY =  System.getenv("FIBER_REFRESH_TOKEN_VALIDITY") != null ? Long.parseLong(System.getenv("FIBER_REFRESH_TOKEN_VALIDITY")) : FiberServer.get().getConfig().getJwtRefreshTokenValidity();
     private static final Key key = Keys.hmacShaKeyFor((SECRET_KEY).getBytes());
 
     /**
@@ -30,17 +31,27 @@ public class JwtUtil {
      * @return The generated JWT token
      */
     public static String generateToken(UserAuth userAuth, String ipAddress, String userAgent) {
-        //System.out.println("---- JWT --");
+        System.out.println("Genereting token for user ID: " + userAuth.getId()+", with "+ipAddress+" and "+userAgent);
+        for(Map.Entry<Object, Object> property : System.getProperties().entrySet()) {
+            System.out.println("System Property: " + property.getKey() + " = " + property.getValue());
+        }
+
+        System.out.println("SECRET_KEY: " + SECRET_KEY);
+        System.out.println("TOKEN_VALIDITY: " + TOKEN_VALIDITY);
+        System.out.println("REFRESH_TOKEN_VALIDITY: " + REFRESH_TOKEN_VALIDITY);
+
+        System.out.println("---- JWT --");
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userAuth.getId());
         claims.put("ip", ipAddress);
         claims.put("userAgent", userAgent);
         claims.put("type", "access");
 
-        for(Map.Entry<String, Object> c : claims.entrySet()) {
-            //System.out.println(c.getKey() + ": " + c.getValue());
+        for(Map.Entry<String, Object> c :
+                claims.entrySet()) {
+            System.out.println(c.getKey() + ": " + c.getValue());
         }
-        //System.out.println("---- JWT --");
+        System.out.println("---- JWT --");
         return createToken(claims, TOKEN_VALIDITY);
     }
 
@@ -85,18 +96,27 @@ public class JwtUtil {
     public static boolean validateToken(String token, String ipAddress, String userAgent) {
         try {
             Claims claims = extractAllClaims(token);
+            for(Map.Entry<String, Object> c :
+                    claims.entrySet()) {
+                System.out.println(c.getKey() + ": " + c.getValue());
+            }
             String tokenIp = claims.get("ip", String.class);
             String tokenUserAgent = claims.get("userAgent", String.class);
             String tokenType = claims.get("type", String.class);
 
             // Validate token type and expiration
             if (!"access".equals(tokenType) || isTokenExpired(claims)) {
+                System.out.println("Token is expired or type mismatch");
                 return false;
             }
 
             // Validate IP and User-Agent
-            return tokenIp.equals(ipAddress) && tokenUserAgent.equals(userAgent);
+            System.out.println("tokenIp : "+ipAddress+" and "+tokenIp);
+            System.out.println("tokenUserAgent : "+userAgent+" and "+tokenUserAgent);
+            //We remove the IP check for now as it can cause issues with users behind proxies or changing networks
+            return /*tokenIp.equals(ipAddress) &&*/ tokenUserAgent.equals(userAgent);
         } catch (Exception e) {
+            e.printStackTrace();
             return false;
         }
     }

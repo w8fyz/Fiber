@@ -221,25 +221,40 @@ public class EndpointHandler extends HttpServlet {
         // Handle OAuth2 application authentication first
         OAuth2ApplicationInfo authenticatedApp = null;
         if (requiresBasicAuth(method)) {
+            System.out.println("[DEBUG] Basic authentication required for method: " + method);
+
             authenticatedApp = FiberServer.get().getBasicAuthenticator().authenticate(req);
+
             if (authenticatedApp == null) {
+                System.out.println("[WARN] Basic authentication failed for request: " + req.getRequestURI());
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Invalid client credentials");
                 return null;
+            } else {
+                System.out.println("[DEBUG] Basic authentication succeeded for app: " + authenticatedApp.clientId());
             }
         }
 
-        // Then handle user authentication if needed
+// Then handle user authentication if needed
         Set<AuthScheme> acceptedSchemes = getAcceptedAuthSchemes(method);
         UserAuth authenticatedUser = null;
         if (!acceptedSchemes.isEmpty()) {
+            System.out.println("[DEBUG] Accepted user auth schemes for " + method + ": " + acceptedSchemes);
+
             authenticatedUser = FiberServer.get().getAuthResolver().resolveUser(req, acceptedSchemes);
+
             if (authenticatedUser == null) {
+                System.out.println("[WARN] User authentication failed for request: " + req.getRequestURI());
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
                 return null;
+            } else {
+                System.out.println("[DEBUG] User authentication succeeded for user ID: " + authenticatedUser.getId());
+                // Store the authenticated user ID in request attributes for PermissionProcessor
+                req.setAttribute("userId", authenticatedUser.getId());
             }
-            // Store the authenticated user ID in request attributes for PermissionProcessor
-            req.setAttribute("userId", authenticatedUser.getId());
+        } else {
+            System.out.println("[DEBUG] No user authentication required for method: " + method);
         }
+
 
         // Execute global middleware
         //System.out.println("EXECUTE GLOBAL MIDDLEWARES");
