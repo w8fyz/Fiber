@@ -77,9 +77,9 @@ public class CorsService {
             
             // Pour les requêtes OPTIONS, on renvoie 200 OK
             response.setStatus(HttpServletResponse.SC_OK);
-            //System.out.println("Preflight request handled successfully");
+            System.out.println("Preflight request handled successfully");
         } else {
-            //System.out.println("Preflight request failed validation");
+            System.out.println("Preflight request failed validation");
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             if (origin == null) System.out.println("Origin is null");
             if (requestMethod == null) System.out.println("Request method is null");
@@ -108,6 +108,7 @@ public class CorsService {
             response.addHeader("Vary", "Origin");
         } else {
             // Si l'origine n'est pas autorisée, on ne configure pas les en-têtes CORS
+            System.out.println("CORS origin not allowed: " + origin);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         }
     }
