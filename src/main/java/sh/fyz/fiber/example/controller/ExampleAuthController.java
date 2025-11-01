@@ -116,7 +116,7 @@ public class ExampleAuthController {
             HttpServletRequest request,
             HttpServletResponse response) throws IOException {
         try {
-            ExampleUser exampleUser = oauthServiceExample.handleCallback(code, state, request.getRequestURL().toString(), request, response);
+            ExampleUser exampleUser = oauthServiceExample.handleCallback(code, state, request.getRequestURL().toString(), request, response).getUser();
             if (exampleUser != null) {
                 Map<String, String> tokens = new HashMap<>();
                 tokens.put("token_type", "Bearer");

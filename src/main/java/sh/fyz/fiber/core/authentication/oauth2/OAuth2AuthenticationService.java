@@ -72,7 +72,7 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
      * @param response The HTTP response
      * @return The authenticated user
      */
-    public T handleCallback(String code, String state, String redirectUri, 
+    public ResponseUser<T> handleCallback(String code, String state, String redirectUri,
                           HttpServletRequest request, HttpServletResponse response) {
         String providerId = stateStore.remove(state);
         if (providerId == null) {
@@ -85,9 +85,9 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         }
         Map<String, Object> userInfo = provider.processCallback(code, redirectUri);
 
-        T user = findOrCreateUser(userInfo, provider);
-        if(user != null) {
-            authenticationService.setAuthCookies(user, request, response);
+        ResponseUser<T> user = findOrCreateUser(userInfo, provider);
+        if(user.getState() == null) {
+            authenticationService.setAuthCookies(user.getUser(), request, response);
         }
         return user;
     }
@@ -98,5 +98,5 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
      * @param provider The OAuth2 provider
      * @return The user
      */
-    protected abstract T findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<T> provider);
+    protected abstract ResponseUser<T> findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<T> provider);
 } 

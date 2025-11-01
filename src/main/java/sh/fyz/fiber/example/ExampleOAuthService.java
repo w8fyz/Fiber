@@ -4,6 +4,7 @@ import sh.fyz.architect.repositories.GenericRepository;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2Provider;
+import sh.fyz.fiber.core.authentication.oauth2.ResponseUser;
 import sh.fyz.fiber.example.repo.ExampleUserRepository;
 import sh.fyz.fiber.example.repo.entities.ExampleUser;
 
@@ -15,7 +16,7 @@ public class ExampleOAuthService extends OAuth2AuthenticationService<ExampleUser
     }
 
     @Override
-    protected ExampleUser findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<ExampleUser> provider) {
+    protected ResponseUser<ExampleUser> findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<ExampleUser> provider) {
         String providerId = provider.getProviderId();
         String externalId = (String) userInfo.get("id");
         
@@ -25,7 +26,7 @@ public class ExampleOAuthService extends OAuth2AuthenticationService<ExampleUser
             // Update existing user information
             provider.mapUserData(userInfo, existingExampleUser);
             existingExampleUser = userRepository.save(existingExampleUser);
-            return existingExampleUser;
+            return new ResponseUser<>(existingExampleUser, null, null);
         }
         
         // Create new user if not found
@@ -38,6 +39,6 @@ public class ExampleOAuthService extends OAuth2AuthenticationService<ExampleUser
         
         // Save the new user
         userRepository.save(newExampleUser);
-        return newExampleUser;
+        return new  ResponseUser<>(newExampleUser, "CREATED", null);
     }
 }
