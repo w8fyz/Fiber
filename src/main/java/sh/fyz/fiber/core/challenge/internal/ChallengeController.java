@@ -13,6 +13,7 @@ import sh.fyz.fiber.core.challenge.Challenge;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 
+import java.util.Map;
 import java.util.Optional;
 
 @Controller("/internal/challenge")
@@ -22,7 +23,7 @@ public class ChallengeController {
 
     @RequestMapping(value = "/verify/{challengeID}", method = RequestMapping.Method.POST)
     @AuditLog(action = "CHALLENGE_VERIFICATION", logParameters = true, maskSensitiveData = true)
-    public ResponseEntity<Object> verifyChallenge(@PathVariable("challengeID") String challengeID, @RequestBody String response,
+    public ResponseEntity<Object> verifyChallenge(@PathVariable("challengeID") String challengeID, @RequestBody Map<String, String> response,
                                                   HttpServletRequest request, HttpServletResponse httpResponse) {
         ChallengeRegistry challengeRegistry = FiberServer.get().getChallengeRegistry();
         Optional<Challenge> challenge = challengeRegistry.getChallenge(challengeID);

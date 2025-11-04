@@ -37,6 +37,11 @@ public class DiscordOAuth2Provider<T extends UserAuth> extends AbstractOAuth2Pro
     }
 
     @Override
+    public String getIdField() {
+        return "id";
+    }
+
+    @Override
     public String getAuthorizationUrl(String state, String redirectUri) {
         return buildAuthorizationUrl(state, redirectUri, defaultScope);
     }

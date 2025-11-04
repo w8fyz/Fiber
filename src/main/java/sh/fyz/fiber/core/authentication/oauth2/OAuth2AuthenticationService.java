@@ -3,9 +3,14 @@ package sh.fyz.fiber.core.authentication.oauth2;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import sh.fyz.fiber.core.challenge.Challenge;
+import sh.fyz.fiber.core.challenge.ChallengeCallback;
+import sh.fyz.fiber.util.ResponseContext;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,7 +24,7 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
     private final AuthenticationService<T> authenticationService;
     private final Map<String, OAuth2Provider<T>> providers;
     private final Map<String, String> stateStore;
-    public final GenericRepository<T> userRepository;
+    private final GenericRepository<T> userRepository;
 
     public OAuth2AuthenticationService(AuthenticationService<T> authenticationService, GenericRepository<T> userRepository) {
         this.authenticationService = authenticationService;
@@ -63,6 +68,14 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         return provider.getAuthorizationUrl(state, redirectUri);
     }
 
+    public String getProviderIdFromState(String state) {
+        return stateStore.remove(state);
+    }
+
+    public Map<String, OAuth2Provider<T>> getProviders() {
+        return providers;
+    }
+
     /**
      * Handle the OAuth2 callback
      * @param code The authorization code
@@ -72,8 +85,8 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
      * @param response The HTTP response
      * @return The authenticated user
      */
-    public ResponseUser<T> handleCallback(String code, String state, String redirectUri,
-                          HttpServletRequest request, HttpServletResponse response) {
+    public ResponseContext<T> handleCallback(String code, String state, String redirectUri,
+                                             HttpServletRequest request, HttpServletResponse response) {
         String providerId = stateStore.remove(state);
         if (providerId == null) {
             throw new IllegalArgumentException("Invalid state parameter");
@@ -85,9 +98,9 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         }
         Map<String, Object> userInfo = provider.processCallback(code, redirectUri);
 
-        ResponseUser<T> user = findOrCreateUser(userInfo, provider);
+        ResponseContext<T> user = findOrCreateUser(userInfo, provider);
         if(user.getState() == null) {
-            authenticationService.setAuthCookies(user.getUser(), request, response);
+            authenticationService.setAuthCookies(user.getResult(), request, response);
         }
         return user;
     }
@@ -98,5 +111,5 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
      * @param provider The OAuth2 provider
      * @return The user
      */
-    protected abstract ResponseUser<T> findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<T> provider);
+    protected abstract ResponseContext<T> findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<T> provider);
 } 

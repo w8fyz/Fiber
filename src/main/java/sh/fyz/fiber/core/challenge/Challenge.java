@@ -21,11 +21,6 @@ public interface Challenge {
     String getId();
 
     /**
-     * @return The type of challenge (e.g., "2FA", "EMAIL_VERIFICATION")
-     */
-    String getType();
-
-    /**
      * @return The user ID this challenge is associated with
      */
     Object getUserId();
@@ -91,4 +86,4 @@ public interface Challenge {
     void setCallback(ChallengeCallback callback);
 
     Map<String, Object> asDTO();
-} 
+}

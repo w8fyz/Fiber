@@ -3,8 +3,6 @@ package sh.fyz.fiber.core.challenge;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.core.ResponseEntity;
-import sh.fyz.fiber.core.challenge.impl.EmailVerificationChallenge;
-import sh.fyz.fiber.core.challenge.impl.TwoFactorChallenge;
 
 import java.io.IOException;
 import java.util.Map;
@@ -17,54 +15,17 @@ import java.util.function.Function;
  * This class manages the registration and creation of different challenge types.
  */
 public class ChallengeRegistry {
-    private final Map<String, Function<Map<String, Object>, Challenge>> challengeCreators;
     private final Map<String, Challenge> activeChallenges;
 
     public ChallengeRegistry() {
-        this.challengeCreators = new ConcurrentHashMap<>();
         this.activeChallenges = new ConcurrentHashMap<>();
     }
-
-    /**
-     * Registers a new challenge type with its creation function
-     * @param type The type identifier for the challenge
-     * @param creator Function that creates a new challenge instance
-     */
-    public void registerChallengeType(String type, Function<Map<String, Object>, Challenge> creator) {
-        challengeCreators.put(type.toUpperCase(), creator);
-    }
-
-    /**
-     * Creates a new challenge of the specified type
-     * @param type The type of challenge to create
-     * @param params Parameters needed for challenge creation
-     * @param callback Optional callback for challenge success/failure
-     * @return The created challenge
-     * @throws IllegalArgumentException if the challenge type is not registered
-     */
-    public Challenge createChallenge(String type, Map<String, Object> params, ChallengeCallback callback) {
-        Function<Map<String, Object>, Challenge> creator = challengeCreators.get(type.toUpperCase());
-        if (creator == null) {
-            throw new IllegalArgumentException("Unsupported challenge type: " + type);
-        }
-        
-        Challenge challenge = creator.apply(params);
+    public Challenge createChallenge(Challenge challenge, ChallengeCallback callback) {
         if (callback != null) {
             challenge.setCallback(callback);
         }
         activeChallenges.put(challenge.getId(), challenge);
         return challenge;
-    }
-
-    /**
-     * Creates a new challenge of the specified type without a callback
-     * @param type The type of challenge to create
-     * @param params Parameters needed for challenge creation
-     * @return The created challenge
-     * @throws IllegalArgumentException if the challenge type is not registered
-     */
-    public Challenge createChallenge(String type, Map<String, Object> params) {
-        return createChallenge(type, params, null);
     }
 
     /**

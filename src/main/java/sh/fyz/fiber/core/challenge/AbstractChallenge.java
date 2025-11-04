@@ -18,7 +18,6 @@ import java.util.UUID;
  */
 public abstract class AbstractChallenge extends DTOConvertible implements Challenge {
     private final String id;
-    private final String type;
     private final Object userId;
     private final Instant createdAt;
     private final Instant expiresAt;
@@ -26,9 +25,8 @@ public abstract class AbstractChallenge extends DTOConvertible implements Challe
     private final Map<String, Object> metadata;
     private ChallengeCallback callback;
 
-    protected AbstractChallenge(String type, Object userId, Instant expiresAt) {
+    protected AbstractChallenge(Object userId, Instant expiresAt) {
         this.id = UUID.randomUUID().toString();
-        this.type = type;
         this.userId = userId;
         this.createdAt = Instant.now();
         this.expiresAt = expiresAt;
@@ -39,11 +37,6 @@ public abstract class AbstractChallenge extends DTOConvertible implements Challe
     @Override
     public String getId() {
         return id;
-    }
-
-    @Override
-    public String getType() {
-        return type;
     }
 
     @Override

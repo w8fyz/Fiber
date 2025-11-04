@@ -16,6 +16,8 @@ public interface OAuth2Provider<T extends UserAuth> {
      */
     String getProviderId();
 
+    String getIdField();
+
     /**
      * Get the authorization URL for the OAuth2 flow
      * @param state A random state parameter for security

@@ -7,10 +7,9 @@ import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public abstract class DTOConvertible {
+import static sh.fyz.fiber.core.dto.DTOCache.FIELD_CACHE;
 
-    // Cache field metadata per class
-    private static final Map<Class<?>, List<Field>> FIELD_CACHE = new ConcurrentHashMap<>();
+public abstract class DTOConvertible {
 
     /**
      * Optional: transform data before conversion to DTO
