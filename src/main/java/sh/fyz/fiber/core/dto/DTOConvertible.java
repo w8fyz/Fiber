@@ -4,69 +4,91 @@ import sh.fyz.fiber.annotations.dto.IgnoreDTO;
 import sh.fyz.fiber.util.JsonUtil;
 
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class DTOConvertible {
+public abstract class DTOConvertible {
 
+    // Cache field metadata per class
+    private static final Map<Class<?>, List<Field>> FIELD_CACHE = new ConcurrentHashMap<>();
 
     /**
-     * Transform data before convesion to JSON-compatible Map
+     * Optional: transform data before conversion to DTO
      */
     public void transform() {}
 
     /**
-     * Get all fields from the class and its parent classes
-     * @param clazz The class to get fields from
-     * @return List of all fields in the inheritance chain
+     * Cached reflection lookup for fields
      */
-    private List<Field> getAllFields(Class<?> clazz) {
-        List<Field> fields = new ArrayList<>();
-        while (clazz != null && clazz != Object.class) {
-            for (Field field : clazz.getDeclaredFields()) {
-                fields.add(field);
+    private static List<Field> getCachedFields(Class<?> clazz) {
+        return FIELD_CACHE.computeIfAbsent(clazz, c -> {
+            List<Field> list = new ArrayList<>();
+            while (c != null && c != Object.class) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (!f.isAnnotationPresent(IgnoreDTO.class)) {
+                        f.setAccessible(true);
+                        list.add(f);
+                    }
+                }
+                c = c.getSuperclass();
             }
-            clazz = clazz.getSuperclass();
-        }
-        return fields;
+            return Collections.unmodifiableList(list);
+        });
     }
 
     /**
-     * Convert the entity to a JSON-compatible Map
-     * @return Map containing field names and their values
+     * Convert to a Map<String,Object> recursively
      */
     public Map<String, Object> asDTO() {
         transform();
         Map<String, Object> dto = new HashMap<>();
-        List<Field> fields = getAllFields(this.getClass());
 
-        for (Field field : fields) {
-            // Skip fields marked with @IgnoreDTO
-            if (field.isAnnotationPresent(IgnoreDTO.class)) {
-                continue;
-            }
-
+        for (Field field : getCachedFields(this.getClass())) {
             try {
-                field.setAccessible(true);
                 Object value = field.get(this);
-                if (value != null) {
-                    // Try to serialize the value to JSON to verify it's JSON-serializable
-                    try {
-                        JsonUtil.toJson(value);
-                        dto.put(field.getName(), value);
-                    } catch (Exception e) {
-                        // Skip this field if JSON serialization fails
-                        continue;
+                if (value == null) continue;
+
+                if (value instanceof DTOConvertible convertible) {
+                    dto.put(field.getName(), convertible.asDTO());
+                } else if (value instanceof Collection<?> col) {
+                    List<Object> list = new ArrayList<>(col.size());
+                    for (Object o : col) {
+                        if (o instanceof DTOConvertible inner)
+                            list.add(inner.asDTO());
+                        else
+                            list.add(o);
                     }
+                    dto.put(field.getName(), list);
+                } else if (value.getClass().isArray()) {
+                    int len = java.lang.reflect.Array.getLength(value);
+                    List<Object> arr = new ArrayList<>(len);
+                    for (int i = 0; i < len; i++) {
+                        Object o = java.lang.reflect.Array.get(value, i);
+                        if (o instanceof DTOConvertible inner)
+                            arr.add(inner.asDTO());
+                        else
+                            arr.add(o);
+                    }
+                    dto.put(field.getName(), arr);
+                } else if (value instanceof Map<?, ?> map) {
+                    Map<Object, Object> newMap = new HashMap<>();
+                    for (Map.Entry<?, ?> e : map.entrySet()) {
+                        Object val = e.getValue();
+                        if (val instanceof DTOConvertible inner) {
+                            newMap.put(e.getKey(), inner.asDTO());
+                        } else {
+                            newMap.put(e.getKey(), val);
+                        }
+                    }
+                    dto.put(field.getName(), newMap);
+                } else {
+                    dto.put(field.getName(), value);
                 }
+
             } catch (IllegalAccessException e) {
-                // Log error or handle appropriately
                 e.printStackTrace();
             }
         }
-
         return dto;
     }
 }
