@@ -3,6 +3,7 @@ package sh.fyz.fiber.core.challenge;
 import com.fasterxml.jackson.databind.util.JSONPObject;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.annotations.dto.IgnoreDTO;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 
@@ -22,7 +23,9 @@ public abstract class AbstractChallenge extends DTOConvertible implements Challe
     private final Instant createdAt;
     private final Instant expiresAt;
     private ChallengeStatus status;
+    @IgnoreDTO
     private final Map<String, Object> metadata;
+    @IgnoreDTO
     private ChallengeCallback callback;
 
     protected AbstractChallenge(Object userId, Instant expiresAt) {
@@ -107,11 +110,5 @@ public abstract class AbstractChallenge extends DTOConvertible implements Challe
 
     protected void addMetadata(String key, Object value) {
         this.metadata.put(key, value);
-    }
-
-
-    @Override
-    public void transform() {
-        getMetadata().clear();
     }
 }

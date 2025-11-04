@@ -1,8 +1,12 @@
 package sh.fyz.fiber;
 
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ScanResult;
+import jakarta.persistence.Entity;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.reflections.Reflections;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.config.FiberConfig;
@@ -11,6 +15,7 @@ import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.challenge.internal.ChallengeController;
+import sh.fyz.fiber.core.dto.DTOConvertible;
 import sh.fyz.fiber.core.email.EmailService;
 import sh.fyz.fiber.core.security.cors.CorsService;
 import sh.fyz.fiber.core.security.csrf.CsrfController;
@@ -30,9 +35,7 @@ import sh.fyz.fiber.core.authentication.impl.BasicAuthenticator;
 import sh.fyz.fiber.handler.parameter.OAuth2ApplicationInfoParameterHandler;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 public class FiberServer {
 
@@ -104,6 +107,21 @@ public class FiberServer {
     public void enableDevelopmentMode() {
         //System.out.println("Development mode enabled");
         this.isDev = true;
+    }
+
+    /*
+    * Preload DTO, will call all asDTO(); in the project, will cache all necessary fields resulting in faster response
+    * Even at first requests
+    * */
+    public void preloadDto() {
+        try (ScanResult scanResult = new ClassGraph()
+                .enableAnnotationInfo()
+                .scan()) {
+
+            scanResult.getClassesImplementing(DTOConvertible.class.getName()).forEach(classInfo -> {
+                DTOConvertible.getCachedFields(classInfo.getClass());
+            });
+        }
     }
 
     public boolean isDev() {

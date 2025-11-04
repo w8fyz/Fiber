@@ -19,7 +19,7 @@ public abstract class DTOConvertible {
     /**
      * Cached reflection lookup for fields
      */
-    private static List<Field> getCachedFields(Class<?> clazz) {
+    public static List<Field> getCachedFields(Class<?> clazz) {
         return FIELD_CACHE.computeIfAbsent(clazz, c -> {
             List<Field> list = new ArrayList<>();
             while (c != null && c != Object.class) {
