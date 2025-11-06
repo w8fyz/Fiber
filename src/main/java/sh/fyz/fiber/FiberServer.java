@@ -33,6 +33,9 @@ import sh.fyz.fiber.core.authentication.RoleRegistry;
 import sh.fyz.fiber.core.authentication.AuthResolver;
 import sh.fyz.fiber.core.authentication.impl.BasicAuthenticator;
 import sh.fyz.fiber.handler.parameter.OAuth2ApplicationInfoParameterHandler;
+import sh.fyz.fiber.dashboard.DashboardController;
+import sh.fyz.fiber.dashboard.DashboardRegistry;
+import sh.fyz.fiber.dashboard.DashboardService;
 
 import java.lang.reflect.Method;
 import java.util.*;
@@ -60,6 +63,8 @@ public class FiberServer {
     private CsrfMiddleware csrfMiddleware;
     private CorsService corsService;
     private final BasicAuthenticator basicAuthenticator;
+    private final DashboardRegistry dashboardRegistry;
+    private final DashboardService dashboardService;
 
     public FiberConfig getConfig() {
         return config;
@@ -84,6 +89,8 @@ public class FiberServer {
         this.authResolver = new AuthResolver();
         this.corsService = new CorsService();
         this.basicAuthenticator = new BasicAuthenticator();
+        this.dashboardRegistry = new DashboardRegistry();
+        this.dashboardService = new DashboardService(dashboardRegistry);
 
         // Initialize validation system
         ValidationInitializer.initialize();
@@ -102,6 +109,7 @@ public class FiberServer {
 
         //Default value
         registerController(new ChallengeController());
+        registerController(new DashboardController());
     }
 
     public void enableDevelopmentMode() {
@@ -206,6 +214,14 @@ public class FiberServer {
      */
     public RoleRegistry getRoleRegistry() {
         return roleRegistry;
+    }
+
+    public DashboardRegistry getDashboardRegistry() {
+        return dashboardRegistry;
+    }
+
+    public DashboardService getDashboardService() {
+        return dashboardService;
     }
 
     /**
