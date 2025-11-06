@@ -73,15 +73,11 @@ public class EndpointHandler extends HttpServlet {
         
         // Extract path variable names
         Matcher matcher = Pattern.compile("\\{([^}]+)}").matcher(path);
-        this.pathVariableNames = new String[0];
-        if (matcher.find()) {
-            this.pathVariableNames = new String[matcher.groupCount()];
-            matcher.reset();
-            int i = 0;
-            while (matcher.find()) {
-                this.pathVariableNames[i++] = matcher.group(1);
-            }
+        List<String> vars = new ArrayList<>();
+        while (matcher.find()) {
+            vars.add(matcher.group(1));
         }
+        this.pathVariableNames = vars.toArray(new String[0]);
     }
 
     @Override

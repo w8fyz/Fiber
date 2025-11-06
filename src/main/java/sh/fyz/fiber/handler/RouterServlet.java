@@ -94,9 +94,8 @@ public class RouterServlet extends HttpServlet {
             }
         } catch (Exception e) {
             System.err.println("Error processing request: " + e.getMessage());
-            e.printStackTrace();
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resp.getOutputStream().write(("Internal server error: " + e.getMessage()).getBytes());
+            resp.getOutputStream().write("{\"status\":500,\"message\":\"Could not process the request right now, please try again.\"}".getBytes());
         }
     }
 } 
