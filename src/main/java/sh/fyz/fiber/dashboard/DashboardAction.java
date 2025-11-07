@@ -2,32 +2,24 @@ package sh.fyz.fiber.dashboard;
 
 import sh.fyz.fiber.annotations.request.RequestMapping;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 public class DashboardAction {
     private final String id;
     private final String label;
-    private final RequestMapping.Method method; // optional if using executor only
-    private final String path;                  // optional if using executor only
     private final Map<String, String> inputSchema;
     private final DashboardActionExecutor executor;
     private final List<DashboardRequestFilter> requestFilters;
     private final List<DashboardRequestTransformer> requestTransformers;
     private final List<DashboardResponseTransformer> responseTransformers;
 
-    public DashboardAction(String id, String label, RequestMapping.Method method, String path, Map<String, String> inputSchema) {
-        this(id, label, method, path, inputSchema, null);
+    public DashboardAction(String label, Map<String, String> inputSchema) {
+        this(label, inputSchema, null);
     }
 
-    public DashboardAction(String id, String label, RequestMapping.Method method, String path, Map<String, String> inputSchema, DashboardActionExecutor executor) {
-        this.id = Objects.requireNonNull(id);
+    public DashboardAction(String label, Map<String, String> inputSchema, DashboardActionExecutor executor) {
+        this.id = UUID.randomUUID().toString().split("-")[0];
         this.label = Objects.requireNonNull(label);
-        this.method = method; // may be null
-        this.path = path;     // may be null
         this.inputSchema = inputSchema == null ? Collections.emptyMap() : Collections.unmodifiableMap(inputSchema);
         this.executor = executor;
         this.requestFilters = new ArrayList<>();
@@ -37,8 +29,6 @@ public class DashboardAction {
 
     public String getId() { return id; }
     public String getLabel() { return label; }
-    public RequestMapping.Method getMethod() { return method; }
-    public String getPath() { return path; }
     public Map<String, String> getInputSchema() { return inputSchema; }
     public DashboardActionExecutor getExecutor() { return executor; }
 

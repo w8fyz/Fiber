@@ -1,20 +1,21 @@
 package sh.fyz.fiber.dashboard.entity;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class DashboardEntityField {
 
     private final String fieldName;
     private final String displayName;
-    private final String type;
+    private String type;
 
-    // Constraints
-    private boolean required;
-    private Integer min;
-    private boolean email;
+    private final Map<String, Object> attributes;
 
     public DashboardEntityField(String fieldName, String displayName, String type) {
         this.fieldName = fieldName;
         this.displayName = displayName;
         this.type = type;
+        this.attributes = new HashMap<>();
     }
 
     public String getFieldName() {
@@ -29,11 +30,19 @@ public class DashboardEntityField {
         return type;
     }
 
-    public boolean isRequired() { return required; }
-    public Integer getMin() { return min; }
-    public boolean isEmail() { return email; }
+    public Map<String, Object> getAttributes() {
+        return attributes;
+    }
 
-    public void setRequired(boolean required) { this.required = required; }
-    public void setMin(Integer min) { this.min = min; }
-    public void setEmail(boolean email) { this.email = email; }
+    public void setType(String type) {
+        this.type = type;
+    }
+
+    public void set(String attributeName, Object value) {
+        this.attributes.put(attributeName, value);
+    }
+
+    public Object getAttribute(String attributeName) {
+        return this.attributes.get(attributeName);
+    }
 }

@@ -3,6 +3,8 @@ package sh.fyz.fiber.example.dashboard;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.dashboard.*;
+import sh.fyz.fiber.dashboard.crud.CrudCapability;
+import sh.fyz.fiber.dashboard.crud.DashboardEntityDataProvider;
 import sh.fyz.fiber.dashboard.entity.DashboardEntity;
 import sh.fyz.fiber.example.ExampleMain;
 import sh.fyz.fiber.example.repo.entities.ExampleUser;
@@ -15,13 +17,14 @@ public class ExampleAdminDashboard extends AbstractDashboard {
     public ExampleAdminDashboard() {
         super("admin-example", "Admin Example", "Demonstrates actions, filters, and transforms");
 
-        addEntity(new DashboardEntity<ExampleUser>(ExampleUser.class, "User") {});
+        addEntity(new DashboardEntity<>(ExampleUser.class, "User")
+                .withCapabilities(CrudCapability.values())
+                .withDataProvider(new GenericDashboardEntityDataProvider<>(
+                        ExampleMain.exampleUserRepository
+                )));
 
         addAction(new DashboardAction(
-            "createUser",
             "Create User",
-            RequestMapping.Method.POST,
-            null,
             Map.of("email", "string", "name", "string", "role", "string"),
             (body, user) -> {
                 Map<String, Object> created = new HashMap<>();
@@ -45,10 +48,7 @@ public class ExampleAdminDashboard extends AbstractDashboard {
         );
 
         addAction(new DashboardAction(
-            "deleteUser",
             "Delete User",
-            RequestMapping.Method.DELETE,
-            null,
 
             Map.of("id", "number"),
             (body, user) -> {

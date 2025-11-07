@@ -112,7 +112,7 @@ public class DashboardService {
     public boolean deleteEntity(String dashboardId, String entityName, Object id) {
         DashboardEntity<?> entity = requireEntity(dashboardId, entityName);
         ensureCapability(entity, CrudCapability.DELETE);
-        DashboardEntityDataProvider provider = entity.getDataProvider();
+        DashboardEntityDataProvider<?> provider = entity.getDataProvider();
         if (provider == null) throw new IllegalStateException("No data provider for entity " + entityName);
         return provider.delete(id);
     }
@@ -169,10 +169,7 @@ public class DashboardService {
                 fm.put("name", f.getFieldName());
                 fm.put("label", f.getDisplayName());
                 fm.put("type", f.getType());
-                // constraints
-                fm.put("required", f.isRequired());
-                fm.put("min", f.getMin());
-                fm.put("email", f.isEmail());
+                fm.put("attributes", f.getAttributes());
                 fields.add(fm);
             }
             em.put("fields", fields);

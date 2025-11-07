@@ -1,5 +1,6 @@
 package sh.fyz.fiber.dashboard.entity;
 
+import jakarta.persistence.Id;
 import sh.fyz.architect.entities.IdentifiableEntity;
 import sh.fyz.fiber.dashboard.crud.CrudCapability;
 import sh.fyz.fiber.dashboard.crud.DashboardEntityDataProvider;
@@ -16,7 +17,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
-public abstract class DashboardEntity<T extends IdentifiableEntity> {
+public class DashboardEntity<T extends IdentifiableEntity> {
 
     private final Class<T> entityClass;
     private final String name;
@@ -32,18 +33,24 @@ public abstract class DashboardEntity<T extends IdentifiableEntity> {
         for (Field f : ReflectionUtil.getFields(clazz)) {
             DashboardEntityField def = new DashboardEntityField(
                 f.getName(),
-                f.getName(),
+                name,
                 f.getType().getSimpleName()
             );
             if (f.isAnnotationPresent(NotNull.class) || f.isAnnotationPresent(NotBlank.class)) {
-                def.setRequired(true);
+                def.set("required", true);
             }
             Min min = f.getAnnotation(Min.class);
             if (min != null) {
-                def.setMin((int) min.value());
+                def.set("min", min.value());
             }
             if (f.isAnnotationPresent(Email.class)) {
-                def.setEmail(true);
+                def.setType("email");
+            }
+            if(f.isAnnotationPresent(Id.class)) {
+                def.set("isId", true);
+            }
+            if(def.getType().equals("list")) {
+                def.set("itemType", ReflectionUtil.getGenericListType(f).getSimpleName());
             }
             this.fields.add(def);
         }

@@ -4,6 +4,8 @@ import sh.fyz.fiber.annotations.dto.IgnoreDTO;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,5 +31,18 @@ public class ReflectionUtil {
     }
 
 
+    public static Class<Object> getGenericListType(Field f) {
+        if (List.class.isAssignableFrom(f.getType())) {
+            Type genericType = f.getGenericType();
+            if (genericType instanceof ParameterizedType) {
+                ParameterizedType listType = (ParameterizedType) genericType;
+                Type elementType = listType.getActualTypeArguments()[0];
 
+                if (elementType instanceof Class<?>) {
+                    return (Class<Object>) elementType; // e.g. String.class
+                }
+            }
+        }
+        return Object.class; // default / unknown
+    }
 }
