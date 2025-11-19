@@ -29,7 +29,7 @@ public class ExampleMain {
                                 new PostgreSQLAuth(
                                         "localhost",
                                         5432, "fiber"),
-                                "postgres" ,"", 16));
+                                "postgres" ,"", 16, 8));
         architect.start();
 
         // Create server

@@ -93,36 +93,36 @@ public abstract class AuthenticationService<T extends UserAuth> {
         String refreshToken = JwtUtil.generateRefreshToken(user, getClientIpAddress(request), request.getHeader("User-Agent"));
         
         // Set access token cookie
-        response.addHeader("Set-Cookie", 
-            "access_token=" + accessToken + cookieConfig.buildCookieAttributesWithMaxAge(cookieConfig.getAccessTokenMaxAge()));
+        response.addHeader("Set-Cookie",
+            "access_token=" + accessToken + cookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), cookieConfig.getAccessTokenMaxAge()));
         
         // Set refresh token cookie with refresh token path
         AuthCookieConfig refreshCookieConfig = new AuthCookieConfig()
                 .setSameSite(cookieConfig.getSameSite())
                 .setSecure(cookieConfig.isSecure())
                 .setHttpOnly(cookieConfig.isHttpOnly())
-                .setDomain(cookieConfig.getDomain())
+                .setDomains(cookieConfig.getDomains())
                 .setPath(refreshTokenPath);
         
         response.addHeader("Set-Cookie", 
-            "refresh_token=" + refreshToken + refreshCookieConfig.buildCookieAttributesWithMaxAge(cookieConfig.getRefreshTokenMaxAge()));
+            "refresh_token=" + refreshToken + refreshCookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), cookieConfig.getRefreshTokenMaxAge()));
     }
 
-    public void clearAuthCookies(HttpServletResponse response) {
+    public void clearAuthCookies(HttpServletRequest request, HttpServletResponse response) {
         // Clear access token cookie
         response.addHeader("Set-Cookie", 
-            "access_token=" + cookieConfig.buildCookieAttributesWithMaxAge(0));
+            "access_token=" + cookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), 0));
         
         // Clear refresh token cookie with refresh token path
         AuthCookieConfig refreshCookieConfig = new AuthCookieConfig()
                 .setSameSite(cookieConfig.getSameSite())
                 .setSecure(cookieConfig.isSecure())
                 .setHttpOnly(cookieConfig.isHttpOnly())
-                .setDomain(cookieConfig.getDomain())
+                .setDomains(cookieConfig.getDomains())
                 .setPath(refreshTokenPath);
         
         response.addHeader("Set-Cookie", 
-            "refresh_token=" + refreshCookieConfig.buildCookieAttributesWithMaxAge(0));
+            "refresh_token=" + refreshCookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), 0));
     }
 
 

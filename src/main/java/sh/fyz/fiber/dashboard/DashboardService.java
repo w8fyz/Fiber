@@ -151,8 +151,6 @@ public class DashboardService {
             Map<String, Object> am = new HashMap<>();
             am.put("id", a.getId());
             am.put("label", a.getLabel());
-            am.put("method", a.getMethod() != null ? a.getMethod().toString() : null);
-            am.put("path", a.getPath());
             am.put("inputSchema", a.getInputSchema());
             actions.add(am);
         }

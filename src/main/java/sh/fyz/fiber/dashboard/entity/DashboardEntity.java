@@ -4,6 +4,7 @@ import jakarta.persistence.Id;
 import sh.fyz.architect.entities.IdentifiableEntity;
 import sh.fyz.fiber.dashboard.crud.CrudCapability;
 import sh.fyz.fiber.dashboard.crud.DashboardEntityDataProvider;
+import sh.fyz.fiber.util.FormatUtil;
 import sh.fyz.fiber.util.ReflectionUtil;
 import sh.fyz.fiber.validation.Email;
 import sh.fyz.fiber.validation.Min;
@@ -27,13 +28,13 @@ public class DashboardEntity<T extends IdentifiableEntity> {
 
     public DashboardEntity(Class<T> clazz, String name) {
         this.entityClass = clazz;
-        this.name =  clazz.getSimpleName();
+        this.name =  name;
         this.fields = new ArrayList<>();
         this.capabilities = EnumSet.noneOf(CrudCapability.class);
         for (Field f : ReflectionUtil.getFields(clazz)) {
             DashboardEntityField def = new DashboardEntityField(
                 f.getName(),
-                name,
+                    FormatUtil.prettyPrint(f.getName()),
                 f.getType().getSimpleName()
             );
             if (f.isAnnotationPresent(NotNull.class) || f.isAnnotationPresent(NotBlank.class)) {

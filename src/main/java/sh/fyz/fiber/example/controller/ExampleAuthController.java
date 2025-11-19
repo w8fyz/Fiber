@@ -153,9 +153,9 @@ public class ExampleAuthController {
 
     @RequestMapping(value = "/logout", method = RequestMapping.Method.POST)
     @AuditLog(action = "LOGOUT", logParameters = false)
-    public ResponseEntity<String> logout(HttpServletResponse response) {
+    public ResponseEntity<String> logout(HttpServletResponse response, HttpServletRequest request) {
         AuthenticationService<?> authService = FiberServer.get().getAuthService();
-        authService.clearAuthCookies(response);
+        authService.clearAuthCookies(request, response);
         return ResponseEntity.ok("Logged out successfully");
     }
 

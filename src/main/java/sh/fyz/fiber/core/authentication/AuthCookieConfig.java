@@ -1,10 +1,13 @@
 package sh.fyz.fiber.core.authentication;
 
+import java.net.URI;
+import java.util.ArrayList;
+
 public class AuthCookieConfig {
     private SameSitePolicy sameSite = SameSitePolicy.STRICT;
     private boolean secure = true;
     private boolean httpOnly = true;
-    private String domain;
+    private ArrayList<String> domains = new ArrayList<>();
     private String path = "/";
     private int accessTokenMaxAge = 3600; // 1 hour
     private int refreshTokenMaxAge = 604800; // 7 days
@@ -26,8 +29,13 @@ public class AuthCookieConfig {
         return this;
     }
 
-    public AuthCookieConfig setDomain(String domain) {
-        this.domain = domain;
+    public AuthCookieConfig addDomain(String domain) {
+        this.domains.add(domain);
+        return this;
+    }
+
+    public AuthCookieConfig setDomains(ArrayList<String> domains) {
+        this.domains = domains;
         return this;
     }
 
@@ -58,8 +66,8 @@ public class AuthCookieConfig {
         return httpOnly;
     }
 
-    public String getDomain() {
-        return domain;
+    public ArrayList<String> getDomains() {
+        return domains;
     }
 
     public String getPath() {
@@ -74,7 +82,22 @@ public class AuthCookieConfig {
         return refreshTokenMaxAge;
     }
 
-    public String buildCookieAttributes() {
+    private String toCookieDomain(String origin) {
+        try {
+            URI uri = new URI(origin);
+            String host = uri.getHost();
+
+            if (host == null || host.isEmpty()) {
+                return null;
+            }
+            return "." + host;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+
+    public String buildCookieAttributes(String domain) {
         StringBuilder attributes = new StringBuilder();
         
         if (httpOnly) {
@@ -88,8 +111,10 @@ public class AuthCookieConfig {
         if (sameSite != null) {
             attributes.append("; SameSite=").append(sameSite.getValue());
         }
-        
-        if (domain != null && !domain.trim().isEmpty()) {
+
+        String formatedDomain = toCookieDomain(domain);
+
+        if (domain != null && !domain.trim().isEmpty() && domains.contains(formatedDomain)) {
             attributes.append("; Domain=").append(domain.trim());
         }
         
@@ -98,7 +123,7 @@ public class AuthCookieConfig {
         return attributes.toString();
     }
 
-    public String buildCookieAttributesWithMaxAge(int maxAge) {
-        return buildCookieAttributes() + "; Max-Age=" + maxAge;
+    public String buildCookieAttributesWithMaxAge(String origin, int maxAge) {
+        return buildCookieAttributes(origin) + "; Max-Age=" + maxAge;
     }
 } 
