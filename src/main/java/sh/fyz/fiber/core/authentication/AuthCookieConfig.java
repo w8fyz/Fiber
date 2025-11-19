@@ -115,7 +115,7 @@ public class AuthCookieConfig {
         String formatedDomain = toCookieDomain(domain);
 
         if (domain != null && !domain.trim().isEmpty() && domains.contains(formatedDomain)) {
-            attributes.append("; Domain=").append(domain.trim());
+            attributes.append("; Domain=").append(formatedDomain);
         }
         
         attributes.append("; Path=").append(path);
