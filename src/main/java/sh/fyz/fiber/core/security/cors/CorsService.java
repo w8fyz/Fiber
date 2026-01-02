@@ -55,17 +55,37 @@ public class CorsService {
         return this;
     }
 
+    private boolean matchesWildcard(String pattern, String origin) {
+        String regex = pattern
+                .replace(".", "\\.")
+                .replace("?", "\\?")
+                .replace("*", ".*");
+        return origin.matches(regex);
+    }
+
     public boolean isOriginAllowed(String origin) {
 
-        if (origin == null && allowNullOrigin) {
-            return true;
+        if (origin == null) {
+            return allowNullOrigin;
         }
-        
-        if (allowedOrigins.isEmpty()) {
+        if (allowedOrigins == null || allowedOrigins.isEmpty()) {
             return false;
         }
-        return allowedOrigins.contains("*") || allowedOrigins.contains(origin);
+
+        for (String allowed : allowedOrigins) {
+            if ("*".equals(allowed)) {
+                return true;
+            }
+            if (!allowed.contains("*") && allowed.equals(origin)) {
+                return true;
+            }
+            if (allowed.contains("*") && matchesWildcard(allowed, origin)) {
+                return true;
+            }
+        }
+        return false;
     }
+
 
     public void handlePreflightRequest(HttpServletRequest request, HttpServletResponse response) {
         String origin = request.getHeader("Origin");
@@ -77,9 +97,7 @@ public class CorsService {
             
             // Pour les requêtes OPTIONS, on renvoie 200 OK
             response.setStatus(HttpServletResponse.SC_OK);
-            System.out.println("Preflight request handled successfully");
         } else {
-            System.out.println("Preflight request failed validation");
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             if (origin == null) System.out.println("Origin is null");
             if (requestMethod == null) System.out.println("Request method is null");
@@ -103,11 +121,9 @@ public class CorsService {
             response.setHeader("Access-Control-Allow-Methods", String.join(", ", allowedMethods));
             response.setHeader("Access-Control-Allow-Headers", String.join(", ", allowedHeaders));
             response.setHeader("Access-Control-Max-Age", String.valueOf(maxAge));
-            
-            // Ajout de Vary: Origin pour le cache
+
             response.addHeader("Vary", "Origin");
         } else {
-            // Si l'origine n'est pas autorisée, on ne configure pas les en-têtes CORS
             System.out.println("CORS origin not allowed: " + origin);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         }
