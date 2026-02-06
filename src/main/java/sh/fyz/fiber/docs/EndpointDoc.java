@@ -40,6 +40,10 @@ public class EndpointDoc {
     }
 
     private static Object generateExample(Class<?> type) {
+        return generateExample(type, new java.util.HashSet<>());
+    }
+
+    private static Object generateExample(Class<?> type, java.util.Set<Class<?>> visited) {
         if (type == String.class) {
             return "example_string";
         } else if (type == Integer.class || type == int.class) {
@@ -69,11 +73,21 @@ public class EndpointDoc {
             example.put("data", generateDataExample());
             return example;
         } else {
+            // Éviter la récursion infinie pour les références circulaires
+            if (visited.contains(type)) {
+                return "circular_reference";
+            }
+            visited.add(type);
+
             try {
                 Map<String, Object> example = new HashMap<>();
                 for (Field field : type.getDeclaredFields()) {
+                    // Ignorer les champs synthétiques et statiques
+                    if (field.isSynthetic() || java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                        continue;
+                    }
                     field.setAccessible(true);
-                    example.put(field.getName(), generateExample(field.getType()));
+                    example.put(field.getName(), generateExample(field.getType(), new java.util.HashSet<>(visited)));
                 }
                 return example;
             } catch (Exception e) {
