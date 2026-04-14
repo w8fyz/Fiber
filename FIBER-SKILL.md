@@ -276,7 +276,11 @@ Body handling:
 - Any other object → Jackson JSON serialization
 - If body implements `DTOConvertible`, `asDTO()` is called before serialization
 
-**Important**: `ResponseEntity.write()` checks `resp.isCommitted()` before writing. If the response is already committed (e.g., by a callback), it skips writing. Methods return `this` for fluent chaining: `.header(name, value)`, `.contentType(type)`.
+**Serialization behavior**:
+- `DTOConvertible` objects are automatically converted via `asDTO()` before Jackson serialization — `@IgnoreDTO` fields and null fields are excluded. This applies recursively inside Maps, Lists, and arrays.
+- The response is serialized to `byte[]` first, then written to the output stream with `Content-Length` set. This prevents truncated JSON from streaming errors (e.g., Hibernate lazy-loading exceptions mid-write).
+- `ResponseEntity.write()` checks `resp.isCommitted()` before writing. Methods return `this` for fluent chaining: `.header(name, value)`, `.contentType(type)`.
+- `ResponseEntity.prepareForSerialization(Object)` is public and can be used directly if needed.
 
 ## Authentication
 

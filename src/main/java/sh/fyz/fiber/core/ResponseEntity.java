@@ -2,12 +2,12 @@ package sh.fyz.fiber.core;
 
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import sh.fyz.fiber.core.dto.DTOConvertible;
 import sh.fyz.fiber.util.FiberObjectMapper;
 import sh.fyz.fiber.util.JsonUtil;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class ResponseEntity<T> {
     private static final FiberObjectMapper MAPPER = new FiberObjectMapper();
@@ -84,10 +84,12 @@ public class ResponseEntity<T> {
     }
 
     public void write(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        if (response.isCommitted()) {
+            return;
+        }
+
         response.setStatus(status);
         response.setContentType(contentType);
-        
-        // Set headers
         headers.forEach(response::setHeader);
 
         if (body == null) {
@@ -101,25 +103,64 @@ public class ResponseEntity<T> {
         }
 
         try {
+            Object serializable;
             if (body instanceof String) {
-                Map<String, Object> responseBody = new HashMap<>();
+                Map<String, Object> responseBody = new LinkedHashMap<>();
                 responseBody.put("uri", uri != null ? uri : request.getRequestURI());
                 responseBody.put("status", status);
                 responseBody.put("message", body);
-                MAPPER.writeValue(response.getWriter(), responseBody);
+                serializable = responseBody;
             } else {
-                MAPPER.writeValue(response.getWriter(), body);
+                serializable = prepareForSerialization(body);
             }
+            byte[] json = MAPPER.writeValueAsBytes(serializable);
+            response.setContentLength(json.length);
+            response.getOutputStream().write(json);
+            response.getOutputStream().flush();
         } catch (Exception e) {
             if (!response.isCommitted()) {
                 response.setStatus(500);
-                Map<String, Object> errorResponse = new HashMap<>();
+                Map<String, Object> errorResponse = new LinkedHashMap<>();
                 errorResponse.put("uri", uri != null ? uri : request.getRequestURI());
                 errorResponse.put("status", 500);
                 errorResponse.put("message", "Internal Server Error: Response body contains non-serializable content");
-                MAPPER.writeValue(response.getWriter(), errorResponse);
+                byte[] json = MAPPER.writeValueAsBytes(errorResponse);
+                response.setContentLength(json.length);
+                response.getOutputStream().write(json);
+                response.getOutputStream().flush();
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Object prepareForSerialization(Object value) {
+        if (value == null) return null;
+        if (value instanceof DTOConvertible dto) {
+            return dto.asDTO();
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<Object, Object> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                result.put(entry.getKey(), prepareForSerialization(entry.getValue()));
+            }
+            return result;
+        }
+        if (value instanceof Collection<?> col) {
+            List<Object> result = new ArrayList<>(col.size());
+            for (Object item : col) {
+                result.add(prepareForSerialization(item));
+            }
+            return result;
+        }
+        if (value.getClass().isArray()) {
+            int len = java.lang.reflect.Array.getLength(value);
+            List<Object> result = new ArrayList<>(len);
+            for (int i = 0; i < len; i++) {
+                result.add(prepareForSerialization(java.lang.reflect.Array.get(value, i)));
+            }
+            return result;
+        }
+        return value;
     }
 
     @Override
