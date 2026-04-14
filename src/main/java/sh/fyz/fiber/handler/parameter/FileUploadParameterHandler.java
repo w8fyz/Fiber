@@ -65,20 +65,30 @@ public class FileUploadParameterHandler implements ParameterHandler {
 
     private void validateFilePart(Part filePart, FileUpload annotation) {
         if (filePart == null) {
-            throw new IllegalArgumentException("Aucun fichier n'a été envoyé");
+            throw new IllegalArgumentException("No file was sent");
         }
 
-        // Vérifier la taille du fichier
         if (annotation.maxSize() > 0 && filePart.getSize() > annotation.maxSize()) {
-            throw new IllegalArgumentException("Le fichier dépasse la taille maximale autorisée");
+            throw new IllegalArgumentException("File exceeds maximum allowed size");
         }
 
-        // Vérifier le type MIME
         if (annotation.allowedMimeTypes().length > 0) {
             String contentType = filePart.getContentType();
-            if (!Arrays.asList(annotation.allowedMimeTypes()).contains(contentType)) {
-                throw new IllegalArgumentException("Type de fichier non autorisé");
+            if (contentType == null || !matchesMimeType(contentType, annotation.allowedMimeTypes())) {
+                throw new IllegalArgumentException("File type not allowed");
             }
         }
+    }
+
+    private boolean matchesMimeType(String contentType, String[] allowed) {
+        for (String pattern : allowed) {
+            if (pattern.equals(contentType)) return true;
+            if (pattern.endsWith("/*")) {
+                String prefix = pattern.substring(0, pattern.length() - 1);
+                if (contentType.startsWith(prefix)) return true;
+            }
+            if (pattern.equals("*/*")) return true;
+        }
+        return false;
     }
 } 

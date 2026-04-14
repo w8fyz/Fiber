@@ -64,6 +64,9 @@ public class FiberServer {
     private final BasicAuthenticator basicAuthenticator;
     private SessionService sessionService;
     private boolean challengeControllerRegistered = false;
+    private long maxFileSize = 50_000_000;
+    private long maxRequestSize = 100_000_000;
+    private int fileSizeThreshold = 1_000_000;
 
     public FiberConfig getConfig() {
         return config;
@@ -319,12 +322,16 @@ public class FiberServer {
     }
 
     public void start() throws Exception {
-        // Create a single servlet to handle all endpoints
         ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry));
+        holder.getRegistration().setMultipartConfig(
+                new jakarta.servlet.MultipartConfigElement(
+                        System.getProperty("java.io.tmpdir"),
+                        maxFileSize, maxRequestSize, fileSizeThreshold
+                )
+        );
         context.addServlet(holder, "/*");
         context.setErrorHandler(new FiberErrorHandler());
         server.start();
-        //System.out.println("WARNING: This server is running in development mode. Do not use in production.");
     }
 
     public void stop() throws Exception {
@@ -357,5 +364,20 @@ public class FiberServer {
 
     public SessionService getSessionService() {
         return sessionService;
+    }
+
+    public FiberServer setMaxFileSize(long maxFileSize) {
+        this.maxFileSize = maxFileSize;
+        return this;
+    }
+
+    public FiberServer setMaxRequestSize(long maxRequestSize) {
+        this.maxRequestSize = maxRequestSize;
+        return this;
+    }
+
+    public FiberServer setFileSizeThreshold(int fileSizeThreshold) {
+        this.fileSizeThreshold = fileSizeThreshold;
+        return this;
     }
 } 

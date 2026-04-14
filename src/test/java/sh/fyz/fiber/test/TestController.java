@@ -14,8 +14,10 @@ import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.logging.AuditContext;
 import sh.fyz.fiber.core.session.FiberSession;
+import sh.fyz.fiber.core.upload.UploadedFile;
 import sh.fyz.fiber.validation.Min;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -180,5 +182,32 @@ public class TestController {
     @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES, slidingWindow = true)
     public ResponseEntity<Map<String, String>> rateLimitedSliding() {
         return ResponseEntity.badRequest(Map.of("status", "fail"));
+    }
+
+    @RequestMapping(value = "/upload", method = RequestMapping.Method.POST)
+    @NoCSRF
+    public ResponseEntity<?> uploadFile(
+            @FileUpload(maxSize = 5_000_000, allowedMimeTypes = {"image/*", "text/plain"}) UploadedFile file) {
+        try {
+            return ResponseEntity.ok(Map.of(
+                    "filename", file.getOriginalFilename(),
+                    "size", file.getSize(),
+                    "contentType", file.getContentType(),
+                    "complete", file.isComplete()
+            ));
+        } finally {
+            try { file.cleanup(); } catch (IOException ignored) {}
+        }
+    }
+
+    @RequestMapping(value = "/upload-restricted", method = RequestMapping.Method.POST)
+    @NoCSRF
+    public ResponseEntity<?> uploadRestricted(
+            @FileUpload(maxSize = 100, allowedMimeTypes = {"application/pdf"}) UploadedFile file) {
+        try {
+            return ResponseEntity.ok(Map.of("filename", file.getOriginalFilename()));
+        } finally {
+            try { file.cleanup(); } catch (IOException ignored) {}
+        }
     }
 }

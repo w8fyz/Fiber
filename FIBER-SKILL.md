@@ -163,6 +163,9 @@ Key configuration methods (call before `start()`):
 - `addMiddleware(Middleware)` — global middleware
 - `registerController(Object)` or `registerController(Class<?>)` — register controllers
 - `preloadDto()` — pre-cache DTOConvertible fields for faster first requests
+- `setMaxFileSize(long)` — max file size in bytes (default 50MB), call before `start()`
+- `setMaxRequestSize(long)` — max multipart request size in bytes (default 100MB)
+- `setFileSizeThreshold(int)` — size in bytes before writing to disk (default 1MB)
 - `start()` / `stop()` — both throw checked `Exception`
 
 Singleton access after construction: `FiberServer.get()`.

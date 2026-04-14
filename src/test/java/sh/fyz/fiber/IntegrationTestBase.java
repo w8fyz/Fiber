@@ -231,6 +231,37 @@ public abstract class IntegrationTestBase {
         return post("/test-auth/login", json);
     }
 
+    protected HttpResponse<String> postMultipart(String path, String fieldName, String filename,
+                                                    String contentType, byte[] fileContent) throws Exception {
+        String boundary = "----FiberTestBoundary" + System.currentTimeMillis();
+        byte[] body = buildMultipartBody(boundary, fieldName, filename, contentType, fileContent);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl() + path))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header("User-Agent", TEST_USER_AGENT)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                .timeout(Duration.ofSeconds(10))
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private byte[] buildMultipartBody(String boundary, String fieldName, String filename,
+                                       String contentType, byte[] fileContent) {
+        String header = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"" + fieldName + "\"; filename=\"" + filename + "\"\r\n"
+                + "Content-Type: " + contentType + "\r\n"
+                + "\r\n";
+        String footer = "\r\n--" + boundary + "--\r\n";
+        byte[] headerBytes = header.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] footerBytes = footer.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] body = new byte[headerBytes.length + fileContent.length + footerBytes.length];
+        System.arraycopy(headerBytes, 0, body, 0, headerBytes.length);
+        System.arraycopy(fileContent, 0, body, headerBytes.length, fileContent.length);
+        System.arraycopy(footerBytes, 0, body, headerBytes.length + fileContent.length, footerBytes.length);
+        return body;
+    }
+
     private static String env(String key, String defaultValue) {
         String val = System.getenv(key);
         return val != null && !val.isEmpty() ? val : defaultValue;
