@@ -8,10 +8,11 @@ import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class UserFieldUtil {
-    private static final Map<Class<?>, Field> passwordFields = new HashMap<>();
-    private static final Map<Class<?>, Map<String, Field>> identifierFields = new HashMap<>();
+    private static final Map<Class<?>, Field> passwordFields = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Map<String, Field>> identifierFields = new ConcurrentHashMap<>();
 
     public static void validateUserClass(Class<?> userClass) {
         if (!UserAuth.class.isAssignableFrom(userClass)) {

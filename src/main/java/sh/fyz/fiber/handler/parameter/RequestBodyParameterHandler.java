@@ -11,9 +11,6 @@ import java.lang.reflect.Parameter;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
-/**
- * Handler pour les paramètres annotés avec @RequestBody.
- */
 public class RequestBodyParameterHandler implements ParameterHandler {
     @Override
     public boolean canHandle(Parameter parameter) {
@@ -26,17 +23,16 @@ public class RequestBodyParameterHandler implements ParameterHandler {
         try {
             Object deserializedObject = JsonUtil.fromJson(body, parameter.getType());
             
-            // Validate the deserialized object
             ValidationResult validationResult = ValidationRegistry.validate(deserializedObject);
             if (!validationResult.isValid()) {
-                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Validation failed: " + String.join(", ", validationResult.getErrors()));
-                return null;
+                throw new IllegalArgumentException("Validation failed: " + String.join(", ", validationResult.getErrors()));
             }
             
             return deserializedObject;
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid JSON Request Body");
-            return null;
+            throw new IllegalArgumentException("Invalid JSON Request Body");
         }
     }
-} 
+}

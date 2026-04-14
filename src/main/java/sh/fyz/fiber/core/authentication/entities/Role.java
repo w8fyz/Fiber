@@ -80,12 +80,16 @@ public abstract class Role {
      * Check if this role has a specific permission
      */
     public boolean hasPermission(String permission) {
+        return hasPermission(permission, new HashSet<>());
+    }
+
+    private boolean hasPermission(String permission, Set<Role> visited) {
         if (permissions.contains(permission)) {
             return true;
         }
-        // Check parent roles recursively
+        visited.add(this);
         for (Role parent : parentRoles) {
-            if (parent.hasPermission(permission)) {
+            if (!visited.contains(parent) && parent.hasPermission(permission, visited)) {
                 return true;
             }
         }

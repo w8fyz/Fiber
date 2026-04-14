@@ -11,7 +11,6 @@ import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.function.Function;
 
 /**
@@ -31,27 +30,18 @@ public class JwtUtil {
      * @return The generated JWT token
      */
     public static String generateToken(UserAuth userAuth, String ipAddress, String userAgent) {
-        System.out.println("Genereting token for user ID: " + userAuth.getId()+", with "+ipAddress+" and "+userAgent);
-        for(Map.Entry<Object, Object> property : System.getProperties().entrySet()) {
-            System.out.println("System Property: " + property.getKey() + " = " + property.getValue());
-        }
+        return generateToken(userAuth, ipAddress, userAgent, null);
+    }
 
-        System.out.println("SECRET_KEY: " + SECRET_KEY);
-        System.out.println("TOKEN_VALIDITY: " + TOKEN_VALIDITY);
-        System.out.println("REFRESH_TOKEN_VALIDITY: " + REFRESH_TOKEN_VALIDITY);
-
-        System.out.println("---- JWT --");
+    public static String generateToken(UserAuth userAuth, String ipAddress, String userAgent, String sessionId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userAuth.getId());
         claims.put("ip", ipAddress);
         claims.put("userAgent", userAgent);
         claims.put("type", "access");
-
-        for(Map.Entry<String, Object> c :
-                claims.entrySet()) {
-            System.out.println(c.getKey() + ": " + c.getValue());
+        if (sessionId != null) {
+            claims.put("sessionId", sessionId);
         }
-        System.out.println("---- JWT --");
         return createToken(claims, TOKEN_VALIDITY);
     }
 
@@ -63,11 +53,18 @@ public class JwtUtil {
      * @return The generated refresh token
      */
     public static String generateRefreshToken(UserAuth userAuth, String ipAddress, String userAgent) {
+        return generateRefreshToken(userAuth, ipAddress, userAgent, null);
+    }
+
+    public static String generateRefreshToken(UserAuth userAuth, String ipAddress, String userAgent, String sessionId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userAuth.getId());
         claims.put("ip", ipAddress);
         claims.put("userAgent", userAgent);
         claims.put("type", "refresh");
+        if (sessionId != null) {
+            claims.put("sessionId", sessionId);
+        }
         return createToken(claims, REFRESH_TOKEN_VALIDITY);
     }
 
@@ -93,31 +90,22 @@ public class JwtUtil {
      * @param userAgent The user agent from which the token is validated
      * @return true if the token is valid, false otherwise
      */
-    public static boolean validateToken(String token, String ipAddress, String userAgent) {
+    public static Claims validateToken(String token, String ipAddress, String userAgent) {
         try {
             Claims claims = extractAllClaims(token);
-            for(Map.Entry<String, Object> c :
-                    claims.entrySet()) {
-                System.out.println(c.getKey() + ": " + c.getValue());
-            }
-            String tokenIp = claims.get("ip", String.class);
             String tokenUserAgent = claims.get("userAgent", String.class);
             String tokenType = claims.get("type", String.class);
 
-            // Validate token type and expiration
             if (!"access".equals(tokenType) || isTokenExpired(claims)) {
-                System.out.println("Token is expired or type mismatch");
-                return false;
+                return null;
             }
 
-            // Validate IP and User-Agent
-            System.out.println("tokenIp : "+ipAddress+" and "+tokenIp);
-            System.out.println("tokenUserAgent : "+userAgent+" and "+tokenUserAgent);
-            //We remove the IP check for now as it can cause issues with users behind proxies or changing networks
-            return /*tokenIp.equals(ipAddress) &&*/ tokenUserAgent.equals(userAgent);
+            if (!tokenUserAgent.equals(userAgent)) {
+                return null;
+            }
+            return claims;
         } catch (Exception e) {
-            e.printStackTrace();
-            return false;
+            return null;
         }
     }
 

@@ -1,5 +1,7 @@
 package sh.fyz.fiber.core.authentication;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.architect.repositories.GenericRepository;
@@ -7,47 +9,51 @@ import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
+import sh.fyz.fiber.core.session.FiberSession;
+import sh.fyz.fiber.core.session.SessionContext;
+import sh.fyz.fiber.core.session.SessionService;
+import sh.fyz.fiber.util.HttpUtil;
 
-import java.time.Instant;
+import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class AuthenticationService<T extends UserAuth> {
 
     private final GenericRepository<T> userRepository;
-    private final Map<String, Integer> loginAttempts = new ConcurrentHashMap<>();
-    private final Map<String, Instant> lastLoginAttempt = new ConcurrentHashMap<>();
-    private static final int MAX_LOGIN_ATTEMPTS = 5;
-    private static final int LOGIN_TIMEOUT_MINUTES = 15;
     private String refreshTokenPath = "/auth";
     private final AuthCookieConfig cookieConfig;
 
+    private final Cache<Object, T> userCache;
 
-
-    /*
-        * Constructor for AuthenticationService
-        * @param userRepository The repository for user data
-        * @param authEndpoint The generic endpoint for authentication, used to generate the refresh token path
-     */
     public AuthenticationService(GenericRepository<T> userRepository, String authEndpoint) {
         this.userRepository = userRepository;
         this.refreshTokenPath = authEndpoint;
-        // Default configuration for backward compatibility
         this.cookieConfig = new AuthCookieConfig()
                 .setSameSite(FiberServer.get().isDev() ? SameSitePolicy.LAX : SameSitePolicy.STRICT)
                 .setSecure(!FiberServer.get().isDev());
+        this.userCache = buildDefaultCache();
     }
 
-    /*
-        * Constructor for AuthenticationService with custom cookie configuration
-        * @param userRepository The repository for user data
-        * @param authEndpoint The generic endpoint for authentication, used to generate the refresh token path
-        * @param cookieConfig Configuration for authentication cookies
-     */
     public AuthenticationService(GenericRepository<T> userRepository, String authEndpoint, AuthCookieConfig cookieConfig) {
         this.userRepository = userRepository;
         this.refreshTokenPath = authEndpoint;
         this.cookieConfig = cookieConfig;
+        this.userCache = buildDefaultCache();
+    }
+
+    private Cache<Object, T> buildDefaultCache() {
+        return Caffeine.newBuilder()
+                .maximumSize(10_000)
+                .expireAfterWrite(Duration.ofSeconds(30))
+                .build();
+    }
+
+    /**
+     * Override to customize the user cache (TTL, size, etc.).
+     * Return null to disable caching entirely.
+     */
+    protected Cache<Object, T> buildUserCache() {
+        return buildDefaultCache();
     }
 
     public Class<T> getUserClass() {
@@ -55,7 +61,26 @@ public abstract class AuthenticationService<T extends UserAuth> {
     }
 
     public T getUserById(Object id) {
-        return userRepository.findById(id);
+        if (userCache == null) {
+            return userRepository.findById(id);
+        }
+        return userCache.get(id, k -> userRepository.findById(k));
+    }
+
+    /**
+     * Evict a user from cache. Call this after any user mutation (save, update, delete).
+     */
+    public void evictUser(Object id) {
+        if (userCache != null) {
+            userCache.invalidate(id);
+        }
+    }
+
+    /** Evict all cached users. */
+    public void evictAllUsers() {
+        if (userCache != null) {
+            userCache.invalidateAll();
+        }
     }
 
     public boolean validateCredentials(UserAuth user, String password) {
@@ -68,8 +93,8 @@ public abstract class AuthenticationService<T extends UserAuth> {
 
     public boolean doesIdentifiersAlreadyExists(UserAuth user) {
         Map<String, String> identifiers = UserFieldUtil.getIdentifiers(user);
-        for(Map.Entry<String, String> entry : identifiers.entrySet()) {
-            if(findUserByIdentifer(entry.getValue()) != null) {
+        for (Map.Entry<String, String> entry : identifiers.entrySet()) {
+            if (findUserByIdentifer(entry.getValue()) != null) {
                 return true;
             }
         }
@@ -77,75 +102,66 @@ public abstract class AuthenticationService<T extends UserAuth> {
     }
 
     public String generateToken(UserAuth user, HttpServletRequest request) {
-        String ipAddress = getClientIpAddress(request);
+        String ipAddress = HttpUtil.getClientIpAddress(request);
         String userAgent = request.getHeader("User-Agent");
         return JwtUtil.generateToken(user, ipAddress, userAgent);
     }
 
     public boolean validateToken(String token, HttpServletRequest request) {
-        String ipAddress = getClientIpAddress(request);
+        String ipAddress = HttpUtil.getClientIpAddress(request);
         String userAgent = request.getHeader("User-Agent");
-        return JwtUtil.validateToken(token, ipAddress, userAgent);
+        return JwtUtil.validateToken(token, ipAddress, userAgent) != null;
     }
 
     public void setAuthCookies(UserAuth user, HttpServletRequest request, HttpServletResponse response) {
-        String accessToken = generateToken(user, request);
-        String refreshToken = JwtUtil.generateRefreshToken(user, getClientIpAddress(request), request.getHeader("User-Agent"));
-        
-        // Set access token cookie
+        String ipAddress = HttpUtil.getClientIpAddress(request);
+        String userAgent = request.getHeader("User-Agent");
+
+        String sessionId = null;
+        SessionService sessionService = FiberServer.get().getSessionService();
+        if (sessionService != null) {
+            FiberSession session = sessionService.createSession(user, request);
+            sessionId = session.getSessionId();
+            SessionContext.set(session);
+        }
+
+        String accessToken = JwtUtil.generateToken(user, ipAddress, userAgent, sessionId);
+        String refreshToken = JwtUtil.generateRefreshToken(user, ipAddress, userAgent, sessionId);
+
         response.addHeader("Set-Cookie",
             "access_token=" + accessToken + cookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), cookieConfig.getAccessTokenMaxAge()));
-        
-        // Set refresh token cookie with refresh token path
+
         AuthCookieConfig refreshCookieConfig = new AuthCookieConfig()
                 .setSameSite(cookieConfig.getSameSite())
                 .setSecure(cookieConfig.isSecure())
                 .setHttpOnly(cookieConfig.isHttpOnly())
                 .setDomains(cookieConfig.getDomains())
                 .setPath(refreshTokenPath);
-        
-        response.addHeader("Set-Cookie", 
+
+        response.addHeader("Set-Cookie",
             "refresh_token=" + refreshToken + refreshCookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), cookieConfig.getRefreshTokenMaxAge()));
     }
 
     public void clearAuthCookies(HttpServletRequest request, HttpServletResponse response) {
-        // Clear access token cookie
-        response.addHeader("Set-Cookie", 
+        SessionService sessionService = FiberServer.get().getSessionService();
+        if (sessionService != null) {
+            FiberSession currentSession = SessionContext.current();
+            if (currentSession != null) {
+                sessionService.invalidate(currentSession.getSessionId());
+            }
+        }
+
+        response.addHeader("Set-Cookie",
             "access_token=" + cookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), 0));
-        
-        // Clear refresh token cookie with refresh token path
+
         AuthCookieConfig refreshCookieConfig = new AuthCookieConfig()
                 .setSameSite(cookieConfig.getSameSite())
                 .setSecure(cookieConfig.isSecure())
                 .setHttpOnly(cookieConfig.isHttpOnly())
                 .setDomains(cookieConfig.getDomains())
                 .setPath(refreshTokenPath);
-        
-        response.addHeader("Set-Cookie", 
+
+        response.addHeader("Set-Cookie",
             "refresh_token=" + refreshCookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), 0));
     }
-
-
-    public String getClientIpAddress(HttpServletRequest request) {
-        String ipAddress = request.getHeader("X-Real-IP");
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getHeader("X-Forwarded-For");
-        }
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getHeader("Proxy-Client-IP");
-        }
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getHeader("WL-Proxy-Client-IP");
-        }
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getHeader("HTTP_CLIENT_IP");
-        }
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getHeader("HTTP_X_FORWARDED_FOR");
-        }
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getRemoteAddr();
-        }
-        return ipAddress;
-    }
-} 
+}

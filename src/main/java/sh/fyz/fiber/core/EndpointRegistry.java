@@ -7,9 +7,9 @@ import sh.fyz.fiber.handler.EndpointHandler;
 import sh.fyz.fiber.middleware.Middleware;
 
 import java.lang.reflect.Method;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class EndpointRegistry {
     private final Map<String, EndpointHandler> endpoints;
@@ -17,7 +17,7 @@ public class EndpointRegistry {
     private String[] defaultRoles;
 
     public EndpointRegistry(List<Middleware> globalMiddleware) {
-        this.endpoints = new HashMap<>();
+        this.endpoints = new ConcurrentHashMap<>();
         this.globalMiddleware = globalMiddleware;
         this.defaultRoles = new String[0];
     }
@@ -40,11 +40,10 @@ public class EndpointRegistry {
             throw new RuntimeException("Failed to create controller instance", e);
         }
 
-        // Get all methods declared in this class
         for (Method method : controllerClass.getDeclaredMethods()) {
             RequestMapping mapping = method.getAnnotation(RequestMapping.class);
             if (mapping != null) {
-                String path = basePath + mapping.value();
+                String path = EndpointHandler.normalizePath(basePath + mapping.value());
                 registerEndpoint(path, mapping.method(), method, controllerInstance);
             }
         }
@@ -67,4 +66,5 @@ public class EndpointRegistry {
     public Map<String, EndpointHandler> getEndpoints() {
         return endpoints;
     }
+
 } 

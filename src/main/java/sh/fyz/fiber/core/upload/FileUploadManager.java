@@ -68,7 +68,7 @@ public class FileUploadManager {
         long now = System.currentTimeMillis();
         uploads.entrySet().removeIf(entry -> {
             UploadedFile file = entry.getValue();
-            if (!file.isComplete() && (now - file.getUploadId().hashCode()) > MAX_UPLOAD_AGE * 3600000) {
+            if (!file.isComplete() && (now - file.getCreatedAt()) > MAX_UPLOAD_AGE * 3600000) {
                 try {
                     file.cleanup();
                 } catch (Exception e) {

@@ -113,7 +113,7 @@ public class ExampleAuthController {
             HttpServletResponse response) {
         
         AuthenticationService<?> authService = FiberServer.get().getAuthService();
-        String ipAddress = authService.getClientIpAddress(request);
+        String ipAddress = sh.fyz.fiber.util.HttpUtil.getClientIpAddress(request);
         String userAgent = request.getHeader("User-Agent");
 
         // Get refresh token from cookie

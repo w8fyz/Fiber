@@ -1,6 +1,5 @@
 package sh.fyz.fiber.core.challenge;
 
-import com.fasterxml.jackson.databind.util.JSONPObject;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.annotations.dto.IgnoreDTO;

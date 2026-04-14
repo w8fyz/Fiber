@@ -4,12 +4,12 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ValidationRegistry {
-    private static final Map<Class<? extends Annotation>, Validator<?>> validators = new HashMap<>();
+    private static final Map<Class<? extends Annotation>, Validator<?>> validators = new ConcurrentHashMap<>();
 
     public static void register(Validator<?> validator) {
         validators.put(validator.getAnnotationType(), validator);

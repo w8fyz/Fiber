@@ -1,13 +1,16 @@
 package sh.fyz.fiber.core.authentication.impl;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import sh.fyz.fiber.FiberServer;
-import sh.fyz.fiber.core.authentication.AuthMiddleware;
 import sh.fyz.fiber.core.authentication.Authenticator;
 import sh.fyz.fiber.core.authentication.AuthScheme;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.JwtUtil;
+import sh.fyz.fiber.core.session.FiberSession;
+import sh.fyz.fiber.core.session.SessionContext;
+import sh.fyz.fiber.core.session.SessionService;
 
 public class CookieAuthenticator implements Authenticator {
     private static final String ACCESS_TOKEN_COOKIE = "access_token";
@@ -19,44 +22,50 @@ public class CookieAuthenticator implements Authenticator {
 
     @Override
     public UserAuth authenticate(HttpServletRequest request) {
-        System.out.println("---- AUTHENTICATION START ----");
-
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
-            System.out.println("No cookies found in request");
-            System.out.println("---- AUTHENTICATION END (no cookies) ----");
             return null;
         }
 
-        System.out.println("Found " + cookies.length + " cookies");
         for (Cookie cookie : cookies) {
-            System.out.println("Checking cookie: " + cookie.getName());
             if (ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
                 String token = cookie.getValue();
-                System.out.println("Found access token cookie: " + token);
+                Claims claims = JwtUtil.validateToken(token, request.getRemoteAddr(), request.getHeader("User-Agent"));
 
-                boolean valid = JwtUtil.validateToken(token, request.getRemoteAddr(), request.getHeader("User-Agent"));
-                System.out.println("Token validation result: " + valid);
+                if (claims != null) {
+                    if (!validateSession(claims)) {
+                        return null;
+                    }
 
-                if (valid) {
-                    Object userId = JwtUtil.extractId(token);
-                    System.out.println("Extracted userId from token: " + userId);
+                    Object userId = claims.get("id");
                     request.setAttribute("userId", userId);
-
-                    UserAuth user = FiberServer.get().getAuthService().getUserById(userId);
-                    System.out.println("Fetched user from AuthService: " + user);
-                    System.out.println("---- AUTHENTICATION END (success) ----");
-                    return user;
+                    return FiberServer.get().getAuthService().getUserById(userId);
                 } else {
-                    System.out.println("Token invalid for cookie: " + ACCESS_TOKEN_COOKIE);
                     break;
                 }
             }
         }
 
-        System.out.println("Access token cookie not found or invalid");
-        System.out.println("---- AUTHENTICATION END (unauthorized) ----");
         return null;
     }
 
-} 
+    private boolean validateSession(Claims claims) {
+        String sessionId = claims.get("sessionId", String.class);
+        if (sessionId == null) {
+            return true;
+        }
+
+        SessionService sessionService = FiberServer.get().getSessionService();
+        if (sessionService == null) {
+            return true;
+        }
+
+        FiberSession session = sessionService.getSession(sessionId);
+        if (session == null) {
+            return false;
+        }
+
+        SessionContext.set(session);
+        return true;
+    }
+}

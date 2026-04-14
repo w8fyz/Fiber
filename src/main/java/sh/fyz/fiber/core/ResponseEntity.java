@@ -1,6 +1,5 @@
 package sh.fyz.fiber.core;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import sh.fyz.fiber.util.FiberObjectMapper;
@@ -11,6 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ResponseEntity<T> {
+    private static final FiberObjectMapper MAPPER = new FiberObjectMapper();
+
     private final T body;
     private final Map<String, String> headers;
     private int status;
@@ -89,31 +90,34 @@ public class ResponseEntity<T> {
         // Set headers
         headers.forEach(response::setHeader);
 
-        // Write body if present
-        if (body != null) {
-            FiberObjectMapper mapper = new FiberObjectMapper();
-            try {
-                if (body instanceof String) {
-                    // Use standardized format for String responses
-                    Map<String, Object> responseBody = new HashMap<>();
-                    responseBody.put("uri", uri != null ? uri : request.getRequestURI());
-                    responseBody.put("status", status);
-                    responseBody.put("message", body);
-                    mapper.writeValue(response.getWriter(), responseBody);
-                } else if (body instanceof byte[]) {
-                    response.getOutputStream().write((byte[]) body);
-                } else {
-                    // For non-String objects, write directly
-                    mapper.writeValue(response.getWriter(), body);
-                }
-            } catch (Exception e) {
-                // Handle non-serializable objects
+        if (body == null) {
+            return;
+        }
+
+        if (body instanceof byte[]) {
+            response.getOutputStream().write((byte[]) body);
+            response.getOutputStream().flush();
+            return;
+        }
+
+        try {
+            if (body instanceof String) {
+                Map<String, Object> responseBody = new HashMap<>();
+                responseBody.put("uri", uri != null ? uri : request.getRequestURI());
+                responseBody.put("status", status);
+                responseBody.put("message", body);
+                MAPPER.writeValue(response.getWriter(), responseBody);
+            } else {
+                MAPPER.writeValue(response.getWriter(), body);
+            }
+        } catch (Exception e) {
+            if (!response.isCommitted()) {
+                response.setStatus(500);
                 Map<String, Object> errorResponse = new HashMap<>();
                 errorResponse.put("uri", uri != null ? uri : request.getRequestURI());
                 errorResponse.put("status", 500);
                 errorResponse.put("message", "Internal Server Error: Response body contains non-serializable content");
-                response.setStatus(500);
-                mapper.writeValue(response.getWriter(), errorResponse);
+                MAPPER.writeValue(response.getWriter(), errorResponse);
             }
         }
     }

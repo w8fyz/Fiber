@@ -15,15 +15,17 @@ public class UploadedFile {
     private final long size;
     private final Path tempFile;
     private final String uploadId;
+    private final long createdAt;
     private boolean isComplete;
     private int totalChunks;
     private int receivedChunks;
 
     public UploadedFile(Part part, String uploadId, int totalChunks) throws IOException {
-        this.originalFilename = part.getSubmittedFileName();
+        this.originalFilename = sanitizeFilename(part.getSubmittedFileName());
         this.contentType = part.getContentType();
         this.size = part.getSize();
         this.uploadId = uploadId != null ? uploadId : UUID.randomUUID().toString();
+        this.createdAt = System.currentTimeMillis();
         this.totalChunks = totalChunks;
         this.receivedChunks = 0;
         this.isComplete = totalChunks <= 1;
@@ -111,7 +113,27 @@ public class UploadedFile {
         return receivedChunks;
     }
 
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
     public InputStream getInputStream() throws IOException {
         return Files.newInputStream(tempFile);
+    }
+
+    private static String sanitizeFilename(String filename) {
+        if (filename == null || filename.isEmpty()) {
+            return "unnamed";
+        }
+        // Strip path separators to prevent path traversal
+        filename = filename.replace("/", "").replace("\\", "");
+        // Remove ".." sequences
+        filename = filename.replace("..", "");
+        // Only keep safe characters
+        filename = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
+        if (filename.isEmpty()) {
+            return "unnamed";
+        }
+        return filename;
     }
 } 

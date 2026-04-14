@@ -41,6 +41,7 @@ public class ParameterHandlerRegistry {
         register(new QueryParameterHandler());
         register(new PathVariableParameterHandler());
         register(new AuthenticatedUserParameterHandler());
+        register(new SessionParameterHandler());
         register(new FileUploadParameterHandler());
         register(new OAuth2ApplicationInfoParameterHandler());
     }

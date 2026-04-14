@@ -1,18 +1,16 @@
 package sh.fyz.fiber;
 
-import io.github.classgraph.ClassGraph;
-import io.github.classgraph.ScanResult;
-import jakarta.persistence.Entity;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-import org.reflections.Reflections;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.config.FiberConfig;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
+import sh.fyz.fiber.core.challenge.Challenge;
+import sh.fyz.fiber.core.challenge.ChallengeCallback;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.challenge.internal.ChallengeController;
 import sh.fyz.fiber.core.dto.DTOConvertible;
@@ -32,10 +30,11 @@ import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 import sh.fyz.fiber.core.authentication.RoleRegistry;
 import sh.fyz.fiber.core.authentication.AuthResolver;
 import sh.fyz.fiber.core.authentication.impl.BasicAuthenticator;
-import sh.fyz.fiber.handler.parameter.OAuth2ApplicationInfoParameterHandler;
-import sh.fyz.fiber.dashboard.DashboardController;
-import sh.fyz.fiber.dashboard.DashboardRegistry;
-import sh.fyz.fiber.dashboard.DashboardService;
+import sh.fyz.fiber.core.session.SessionService;
+import sh.fyz.fiber.handler.EndpointHandler;
+
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ScanResult;
 
 import java.lang.reflect.Method;
 import java.util.*;
@@ -50,7 +49,7 @@ public class FiberServer {
     private OAuth2ClientService oauthClientService;
     private EmailService emailService;
     private AuditLogService auditLogService;
-    private static FiberServer instance;
+    private static volatile FiberServer instance;
     private final Server server;
     private final ServletContextHandler context;
     private final List<Middleware> globalMiddleware;
@@ -63,8 +62,8 @@ public class FiberServer {
     private CsrfMiddleware csrfMiddleware;
     private CorsService corsService;
     private final BasicAuthenticator basicAuthenticator;
-    private final DashboardRegistry dashboardRegistry;
-    private final DashboardService dashboardService;
+    private SessionService sessionService;
+    private boolean challengeControllerRegistered = false;
 
     public FiberConfig getConfig() {
         return config;
@@ -87,10 +86,10 @@ public class FiberServer {
         this.roleRegistry = new RoleRegistry();
         this.challengeRegistry = new ChallengeRegistry();
         this.authResolver = new AuthResolver();
+        this.authResolver.registerAuthenticator(new sh.fyz.fiber.core.authentication.impl.CookieAuthenticator());
+        this.authResolver.registerAuthenticator(new sh.fyz.fiber.core.authentication.impl.BearerAuthenticator());
         this.corsService = new CorsService();
         this.basicAuthenticator = new BasicAuthenticator();
-        this.dashboardRegistry = new DashboardRegistry();
-        this.dashboardService = new DashboardService(dashboardRegistry);
 
         // Initialize validation system
         ValidationInitializer.initialize();
@@ -107,9 +106,6 @@ public class FiberServer {
 
         if (enableDocumentation) enableDocumentation();
 
-        //Default value
-        registerController(new ChallengeController());
-        registerController(new DashboardController());
     }
 
     public void enableDevelopmentMode() {
@@ -127,7 +123,7 @@ public class FiberServer {
                 .scan()) {
 
             scanResult.getClassesImplementing(DTOConvertible.class.getName()).forEach(classInfo -> {
-                DTOConvertible.getCachedFields(classInfo.getClass());
+                DTOConvertible.getCachedFields(classInfo.loadClass());
             });
         }
     }
@@ -190,6 +186,14 @@ public class FiberServer {
         return challengeRegistry;
     }
 
+    public Challenge registerChallenge(Challenge challenge, ChallengeCallback callback) {
+        if (!challengeControllerRegistered) {
+            registerController(new ChallengeController());
+            challengeControllerRegistered = true;
+        }
+        return challengeRegistry.createChallenge(challenge, callback);
+    }
+
     public void setAuditLogService(AuditLogService auditLogService) {
         this.auditLogService = auditLogService;
     }
@@ -214,14 +218,6 @@ public class FiberServer {
      */
     public RoleRegistry getRoleRegistry() {
         return roleRegistry;
-    }
-
-    public DashboardRegistry getDashboardRegistry() {
-        return dashboardRegistry;
-    }
-
-    public DashboardService getDashboardService() {
-        return dashboardService;
     }
 
     /**
@@ -251,7 +247,6 @@ public class FiberServer {
             basePath = "/" + basePath;
         }
 
-        // Register all endpoints in the controller
         for (Method method : controllerClass.getDeclaredMethods()) {
             RequestMapping requestMapping = method.getAnnotation(RequestMapping.class);
             if (requestMapping != null) {
@@ -259,7 +254,7 @@ public class FiberServer {
                 if (!path.startsWith("/")) {
                     path = "/" + path;
                 }
-                String fullPath = basePath + path;
+                String fullPath = EndpointHandler.normalizePath(basePath + path);
                 endpointRegistry.registerEndpoint(fullPath, requestMapping.method(), method, controller);
             }
         }
@@ -354,5 +349,13 @@ public class FiberServer {
 
     public BasicAuthenticator getBasicAuthenticator() {
         return basicAuthenticator;
+    }
+
+    public void setSessionService(SessionService sessionService) {
+        this.sessionService = sessionService;
+    }
+
+    public SessionService getSessionService() {
+        return sessionService;
     }
 } 

@@ -13,8 +13,6 @@ import sh.fyz.fiber.example.oauth2.providers.ExampleDiscordProvider;
 import sh.fyz.fiber.example.repo.ExampleOauth2ClientRepository;
 import sh.fyz.fiber.example.repo.ExampleUserRepository;
 import sh.fyz.fiber.example.repo.entities.ExampleUserRole;
-import sh.fyz.fiber.example.dashboard.ExampleAdminDashboard;
-
 import java.util.Arrays;
 
 public class ExampleMain {
@@ -84,8 +82,6 @@ public class ExampleMain {
         server.registerController(new ExampleController());
         server.registerController(new ExampleAuthController(oauthServiceExample));
         server.registerController(new ExampleTest2Controller());
-        server.getDashboardRegistry().register(new ExampleAdminDashboard());
-        
         // Start the server
         server.start();
         

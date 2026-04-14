@@ -8,16 +8,26 @@ import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.oauth2.client.controller.OAuth2ClientController;
 import sh.fyz.fiber.util.RandomUtil;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class OAuth2ClientService {
     private final GenericRepository<OAuth2Client> clientRepository;
     private final Map<String, AuthorizationCode> authorizationCodes = new ConcurrentHashMap<>();
     private final Map<String, AuthorizationRequest> pendingRequests = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService codeCleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "oauth2-code-cleanup");
+        t.setDaemon(true);
+        return t;
+    });
 
     public OAuth2ClientService(GenericRepository<OAuth2Client> clientRepository, OAuth2ClientController controller) {
         this.clientRepository = clientRepository;
@@ -46,9 +56,11 @@ public class OAuth2ClientService {
     }
 
     public OAuth2Client getClientByCredentials(String clientId, String clientSecret) {
-        return clientRepository.whereList("clientId", clientId)
+        return clientRepository.query().where("clientId", clientId).findAll()
             .stream()
-            .filter(client -> client.getClientSecret().equals(clientSecret))
+            .filter(client -> MessageDigest.isEqual(
+                    client.getClientSecret().getBytes(StandardCharsets.UTF_8),
+                    clientSecret.getBytes(StandardCharsets.UTF_8)))
             .findFirst()
             .orElse(null);
     }
@@ -136,18 +148,7 @@ public class OAuth2ClientService {
      * @param code The authorization code to clean up
      */
     private void scheduleCodeCleanup(String code) {
-        // In a real implementation, use a proper scheduler like Quartz or a database with TTL
-        // For this example, we'll use a simple thread that sleeps and then removes the code
-        new Thread(() -> {
-            try {
-                // Sleep for 10 minutes (code expiration time)
-                Thread.sleep(600000);
-                // Remove the code if it still exists
-                authorizationCodes.remove(code);
-            } catch (InterruptedException e) {
-                // Thread interrupted, ignore
-            }
-        }).start();
+        codeCleanupExecutor.schedule(() -> authorizationCodes.remove(code), 10, TimeUnit.MINUTES);
     }
     
     /**

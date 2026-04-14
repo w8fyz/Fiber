@@ -99,9 +99,6 @@ public class CorsService {
             response.setStatus(HttpServletResponse.SC_OK);
         } else {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            if (origin == null) System.out.println("Origin is null");
-            if (requestMethod == null) System.out.println("Request method is null");
-            if (!isOriginAllowed(origin)) System.out.println("Origin not allowed");
         }
     }
 
@@ -124,7 +121,6 @@ public class CorsService {
 
             response.addHeader("Vary", "Origin");
         } else {
-            System.out.println("CORS origin not allowed: " + origin);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         }
     }

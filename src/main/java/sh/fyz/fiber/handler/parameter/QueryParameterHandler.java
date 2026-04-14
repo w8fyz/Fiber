@@ -22,6 +22,10 @@ public class QueryParameterHandler implements ParameterHandler {
     public Object handle(Parameter parameter, HttpServletRequest request, HttpServletResponse response, Matcher pathMatcher) throws Exception {
         Param param = parameter.getAnnotation(Param.class);
         String value = request.getParameter(param.value());
+
+        if (value == null && param.required()) {
+            throw new IllegalArgumentException("Required parameter '" + param.value() + "' is missing");
+        }
         
         Object convertedValue = convertValue(value, parameter.getType());
         ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);

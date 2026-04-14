@@ -2,52 +2,64 @@ plugins {
     id 'maven-publish'
     id 'java'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'me.champeau.jmh' version '0.7.2'
 }
 
 group = 'sh.fyz'
-version = '1.0-SNAPSHOT'
+version = '2.0.0'
 
 repositories {
+    mavenLocal()
     mavenCentral()
 }
 
 dependencies {
+    implementation 'sh.fyz:Architect:2.0.0'
     implementation 'org.postgresql:postgresql:42.7.8'
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    // Jetty Server
+
     implementation 'org.eclipse.jetty:jetty-server:11.0.26'
     implementation 'org.eclipse.jetty:jetty-servlet:11.0.26'
 
-    // JWT
     implementation 'io.jsonwebtoken:jjwt:0.13.0'
 
-    // Jakarta Servlet API
     implementation 'jakarta.servlet:jakarta.servlet-api:6.1.0'
 
-    // Jackson for JSON serialization
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.20.1'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.20.1'
 
-    // Mail
     implementation 'jakarta.mail:jakarta.mail-api:2.1.5'
     implementation 'org.eclipse.angus:jakarta.mail:2.0.5'
 
     implementation 'org.jsoup:jsoup:1.21.2'
 
-    // Test dependencies
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
-
     implementation 'org.mindrot:jbcrypt:0.4'
+
+    implementation 'io.github.classgraph:classgraph:4.8.174'
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
 }
 
 test {
     useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+    }
 }
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
+}
+
+jmh {
+    warmupIterations = 3
+    iterations = 5
+    fork = 1
+    benchmarkMode = ['thrpt']
 }
 
 shadowJar {

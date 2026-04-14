@@ -14,6 +14,9 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Simplified OAuth2 authentication service.
@@ -21,16 +24,41 @@ import java.util.concurrent.ConcurrentHashMap;
  * @param <T> The type of user entity used in the application
  */
 public abstract class OAuth2AuthenticationService<T extends UserAuth> {
+    private static final long STATE_TTL_MINUTES = 10;
+
     private final AuthenticationService<T> authenticationService;
     private final Map<String, OAuth2Provider<T>> providers;
-    private final Map<String, String> stateStore;
+    private final Map<String, StateEntry> stateStore;
     private final GenericRepository<T> userRepository;
+    private final ScheduledExecutorService stateCleanupExecutor;
 
     public OAuth2AuthenticationService(AuthenticationService<T> authenticationService, GenericRepository<T> userRepository) {
         this.authenticationService = authenticationService;
         this.userRepository = userRepository;
         this.providers = new ConcurrentHashMap<>();
         this.stateStore = new ConcurrentHashMap<>();
+        this.stateCleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "oauth2-state-cleanup");
+            t.setDaemon(true);
+            return t;
+        });
+        this.stateCleanupExecutor.scheduleAtFixedRate(
+                () -> {
+                    long now = System.currentTimeMillis();
+                    stateStore.entrySet().removeIf(e -> now > e.getValue().expiresAt);
+                },
+                1, 1, TimeUnit.MINUTES
+        );
+    }
+
+    private static class StateEntry {
+        final String providerId;
+        final long expiresAt;
+
+        StateEntry(String providerId) {
+            this.providerId = providerId;
+            this.expiresAt = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(STATE_TTL_MINUTES);
+        }
     }
 
     /**
@@ -63,13 +91,17 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         }
 
         String state = UUID.randomUUID().toString();
-        stateStore.put(state, providerId);
+        stateStore.put(state, new StateEntry(providerId));
         
         return provider.getAuthorizationUrl(state, redirectUri);
     }
 
     public String getProviderIdFromState(String state) {
-        return stateStore.remove(state);
+        StateEntry entry = stateStore.remove(state);
+        if (entry == null || System.currentTimeMillis() > entry.expiresAt) {
+            return null;
+        }
+        return entry.providerId;
     }
 
     public Map<String, OAuth2Provider<T>> getProviders() {
@@ -87,7 +119,11 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
      */
     public ResponseContext<T> handleCallback(String code, String state, String redirectUri,
                                              HttpServletRequest request, HttpServletResponse response) {
-        String providerId = stateStore.remove(state);
+        StateEntry stateEntry = stateStore.remove(state);
+        if (stateEntry == null || System.currentTimeMillis() > stateEntry.expiresAt) {
+            throw new IllegalArgumentException("Invalid or expired state parameter");
+        }
+        String providerId = stateEntry.providerId;
         if (providerId == null) {
             throw new IllegalArgumentException("Invalid state parameter");
         }

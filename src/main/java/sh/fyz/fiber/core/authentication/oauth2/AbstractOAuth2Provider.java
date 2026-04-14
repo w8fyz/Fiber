@@ -159,35 +159,23 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
 
     protected Map<String, String> parseJsonResponse(String json) {
         try {
-            System.out.println("[OAuth2][parseJsonResponse] input body: " + json);
             if (json != null && json.trim().startsWith("{")) {
-                Map<String, String> result = OBJECT_MAPPER.readValue(json, new TypeReference<Map<String, String>>() {});
-                System.out.println("[OAuth2][parseJsonResponse] parsed JSON map: " + result);
-                return result;
+                return OBJECT_MAPPER.readValue(json, new TypeReference<Map<String, String>>() {});
             }
-            Map<String, String> result = parseFormUrlEncoded(json);
-            System.out.println("[OAuth2][parseJsonResponse] parsed form-encoded map: " + result);
-            return result;
+            return parseFormUrlEncoded(json);
         } catch (Exception e) {
-            System.out.println("[OAuth2][parseJsonResponse] error: " + e.getMessage());
             throw new RuntimeException("Failed to parse JSON response", e);
         }
     }
     
     protected Map<String, Object> parseJsonResponseToMap(String json) {
         try {
-            System.out.println("[OAuth2][parseJsonResponseToMap] input body: " + json);
             if (json != null && json.trim().startsWith("{")) {
-                Map<String, Object> result = OBJECT_MAPPER.readValue(json, new TypeReference<Map<String, Object>>() {});
-                System.out.println("[OAuth2][parseJsonResponseToMap] parsed JSON map: " + result);
-                return result;
+                return OBJECT_MAPPER.readValue(json, new TypeReference<Map<String, Object>>() {});
             }
             Map<String, String> stringMap = parseFormUrlEncoded(json);
-            Map<String, Object> result = new HashMap<>(stringMap);
-            System.out.println("[OAuth2][parseJsonResponseToMap] parsed form-encoded map: " + result);
-            return result;
+            return new HashMap<>(stringMap);
         } catch (Exception e) {
-            System.out.println("[OAuth2][parseJsonResponseToMap] error: " + e.getMessage());
             throw new RuntimeException("Failed to parse JSON response to map", e);
         }
     }

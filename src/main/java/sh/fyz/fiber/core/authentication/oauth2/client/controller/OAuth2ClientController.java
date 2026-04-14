@@ -14,9 +14,10 @@ import sh.fyz.fiber.core.authentication.entities.OAuth2Client;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @Controller("/oauth/client")
 public class OAuth2ClientController {
@@ -26,11 +27,6 @@ public class OAuth2ClientController {
     public OAuth2ClientController(OAuth2ClientService clientService) {
         this.clientService = clientService;
         this.authService = FiberServer.get().getAuthService();
-    }
-
-    @RequestMapping(value = "/test", method = RequestMapping.Method.GET)
-    public ResponseEntity<?> test() {
-        return ResponseEntity.ok(clientService.registerClient("Test Client", "http://localhost:8080/callback"));
     }
 
     @RequestMapping(value = "/authorize", method = RequestMapping.Method.GET)
@@ -65,9 +61,9 @@ public class OAuth2ClientController {
         String code = clientService.generateAuthorizationCode(user, clientId);
         
         // Build redirect URL with code
-        String redirectUrl = redirectUri + "?code=" + code;
+        String redirectUrl = redirectUri + "?code=" + URLEncoder.encode(code, StandardCharsets.UTF_8);
         if (state != null) {
-            redirectUrl += "&state=" + state;
+            redirectUrl += "&state=" + URLEncoder.encode(state, StandardCharsets.UTF_8);
         }
         
         response.setHeader("Location", redirectUrl);

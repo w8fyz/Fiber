@@ -6,9 +6,9 @@ import sh.fyz.fiber.core.authentication.entities.OAuth2Client;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationAuthenticator;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Base64;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class BasicAuthenticator implements OAuth2ApplicationAuthenticator {
 
@@ -36,7 +36,9 @@ public class BasicAuthenticator implements OAuth2ApplicationAuthenticator {
                 //System.out.println("Client Secret : "+clientSecret);
                 OAuth2Client appInfo = FiberServer.get().getOauthClientService().getClient(clientId);
                 //System.out.println("appInfo : "+(appInfo != null ? appInfo.getClientId() : "null"));
-                if (appInfo != null && appInfo.getClientSecret().equals(clientSecret)) {
+                if (appInfo != null && MessageDigest.isEqual(
+                        appInfo.getClientSecret().getBytes(StandardCharsets.UTF_8),
+                        clientSecret.getBytes(StandardCharsets.UTF_8))) {
                     return new OAuth2ApplicationInfo(appInfo.getClientId(), appInfo.getClientSecret());
                 }
             }

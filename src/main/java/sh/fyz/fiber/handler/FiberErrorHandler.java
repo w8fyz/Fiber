@@ -4,12 +4,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.handler.ErrorHandler;
+import sh.fyz.fiber.util.FiberObjectMapper;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.Writer;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class FiberErrorHandler extends ErrorHandler {
+
+    private static final FiberObjectMapper MAPPER = new FiberObjectMapper();
 
     @Override
     public void handle(String target, Request baseRequest,
@@ -24,20 +28,13 @@ public class FiberErrorHandler extends ErrorHandler {
             message = "Unexpected error";
         }
 
-        String json = String.format("""
-                    {
-                      "url": "%s",
-                      "status": %d,
-                      "message": "%s"
-                    }
-                    """,
-                request.getRequestURL(),
-                status,
-                message
-        );
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("url", request.getRequestURL().toString());
+        body.put("status", status);
+        body.put("message", message);
 
         PrintWriter writer = response.getWriter();
-        writer.write(json);
+        MAPPER.writeValue(writer, body);
         writer.flush();
         baseRequest.setHandled(true);
     }

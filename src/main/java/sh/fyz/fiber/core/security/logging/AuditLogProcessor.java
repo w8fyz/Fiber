@@ -17,7 +17,6 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class AuditLogProcessor {
     private static final Logger logger = LoggerFactory.getLogger(AuditLogProcessor.class);
@@ -25,8 +24,7 @@ public class AuditLogProcessor {
     @SuppressWarnings("unchecked")
     public static void logAuditEvent(HttpServletRequest req, HttpServletResponse resp, AuditLog auditLog, Method method, Object[] args, Object result) {
         Map<String, Object> logData = new LinkedHashMap<>();
-        
-        // Basic request info
+
         logData.put("timestamp", new Date().getTime());
         logData.put("ip", req.getRemoteAddr());
         logData.put("userAgent", req.getHeader("User-Agent"));
@@ -35,7 +33,6 @@ public class AuditLogProcessor {
         logData.put("action", auditLog.action());
         logData.put("status", resp.getStatus());
 
-        // Query Parameters
         Map<String, String> queryParams = new HashMap<>();
         req.getParameterMap().forEach((key, values) -> {
             if (values != null && values.length > 0) {
@@ -46,14 +43,13 @@ public class AuditLogProcessor {
             logData.put("queryParams", queryParams);
         }
 
-        // Path Variables
         if (method.getDeclaringClass().getAnnotation(sh.fyz.fiber.annotations.request.Controller.class) != null) {
             try {
                 String path = method.getAnnotation(sh.fyz.fiber.annotations.request.RequestMapping.class).value();
                 Pattern pattern = Pattern.compile("\\{([^}]+)}");
                 Matcher matcher = pattern.matcher(path);
                 Map<String, String> pathVars = new HashMap<>();
-                
+
                 while (matcher.find()) {
                     String varName = matcher.group(1);
                     String varPattern = path.replace("{" + varName + "}", "([^/]+)");
@@ -63,7 +59,7 @@ public class AuditLogProcessor {
                         pathVars.put(varName, valueMatcher.group(1));
                     }
                 }
-                
+
                 if (!pathVars.isEmpty()) {
                     logData.put("pathVariables", pathVars);
                 }
@@ -72,18 +68,15 @@ public class AuditLogProcessor {
             }
         }
 
-        // Request Body (for POST/PUT methods)
         if (req.getMethod().equals("POST") || req.getMethod().equals("PUT")) {
             try {
                 BufferedReader reader = req.getReader();
                 String requestBody = reader.lines().collect(Collectors.joining());
                 if (!requestBody.isEmpty()) {
-                    // Try to parse as JSON for better formatting
                     try {
                         Object jsonBody = JsonUtil.fromJson(requestBody, Object.class);
                         logData.put("requestBody", jsonBody);
                     } catch (Exception e) {
-                        // If not valid JSON, store as string
                         logData.put("requestBody", requestBody);
                     }
                 }
@@ -92,60 +85,70 @@ public class AuditLogProcessor {
             }
         }
 
-        // Method Parameters
         if (auditLog.logParameters() && args != null && args.length > 0) {
             Parameter[] parameters = method.getParameters();
             Map<String, Object> methodParams = new HashMap<>();
-            
+
             for (int i = 0; i < parameters.length && i < args.length; i++) {
                 String paramName = parameters[i].getName();
                 Object paramValue = args[i];
-                
+
                 if (paramValue != null) {
-                    // Convert the parameter value to a serializable format
+                    if (auditLog.maskSensitiveData()) {
+                        paramValue = maskSensitiveFields(paramValue);
+                    }
                     try {
-                        // Try to convert to JSON and back to ensure it's serializable
                         String jsonValue = JsonUtil.toJson(paramValue);
                         Object serializedValue = JsonUtil.fromJson(jsonValue, Object.class);
                         methodParams.put(paramName, serializedValue);
                     } catch (Exception e) {
-                        // If serialization fails, use toString()
                         methodParams.put(paramName, paramValue.toString());
                     }
                 }
             }
-            
+
             if (!methodParams.isEmpty()) {
                 logData.put("parameters", methodParams);
             }
         }
 
-        // Response
         if (auditLog.logResult() && result != null) {
             try {
-                // Try to convert to JSON and back to ensure it's serializable
                 String jsonResult = JsonUtil.toJson(result);
                 Object serializedResult = JsonUtil.fromJson(jsonResult, Object.class);
                 logData.put("response", serializedResult);
             } catch (Exception e) {
-                // If serialization fails, use toString()
                 logData.put("response", result.toString());
             }
         }
 
-        // Log the final JSON
+        // Collect custom data from AuditContext (set by the endpoint handler)
+        Map<String, Object> customData = AuditContext.getAll();
+        if (customData != null) {
+            logData.put("customData", customData);
+        }
+
+        if (auditLog.maskSensitiveData() && logData.containsKey("requestBody")) {
+            Object body = logData.get("requestBody");
+            if (body instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> bodyMap = (Map<String, Object>) body;
+                maskMapFields(bodyMap);
+                logData.put("requestBody", bodyMap);
+            }
+        }
+
         try {
             String logMessage = JsonUtil.toJson(logData);
             logger.info(logMessage);
 
-            // Send to AuditLogService if configured
             AuditLogService service = FiberServer.get().getAuditLogService();
             if (service != null) {
-                Map<String, String> queryParamsMap = logData.containsKey("queryParams") ? 
+                Map<String, String> queryParamsMap = logData.containsKey("queryParams") ?
                     (Map<String, String>) logData.get("queryParams") : null;
-                Map<String, String> pathVarsMap = logData.containsKey("pathVariables") ? 
+                Map<String, String> pathVarsMap = logData.containsKey("pathVariables") ?
                     (Map<String, String>) logData.get("pathVariables") : null;
-                Map<String, Object> paramsMap = logData.containsKey("parameters") ? 
+                Map<String, Object> paramsMap = logData.containsKey("parameters") ?
                     (Map<String, Object>) logData.get("parameters") : null;
 
                 service.onAuditLog(new sh.fyz.fiber.core.security.logging.AuditLog(
@@ -161,12 +164,36 @@ public class AuditLogProcessor {
                     logData.get("requestBody"),
                     paramsMap,
                     logData.get("response"),
+                    customData,
                     logMessage
                 ));
             }
         } catch (Exception e) {
             logger.error("Failed to serialize log data", e);
+        } finally {
+            AuditContext.clear();
         }
     }
 
-} 
+    private static Object maskSensitiveFields(Object value) {
+        if (value == null) return null;
+        for (Field field : value.getClass().getDeclaredFields()) {
+            if (field.isAnnotationPresent(PasswordField.class)) {
+                field.setAccessible(true);
+                try {
+                    field.set(value, "***MASKED***");
+                } catch (IllegalAccessException ignored) {}
+            }
+        }
+        return value;
+    }
+
+    private static void maskMapFields(Map<String, Object> map) {
+        for (String key : map.keySet()) {
+            String lower = key.toLowerCase();
+            if (lower.contains("password") || lower.contains("secret") || lower.contains("token")) {
+                map.put(key, "***MASKED***");
+            }
+        }
+    }
+}

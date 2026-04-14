@@ -3,20 +3,37 @@ package sh.fyz.fiber.config;
 import sh.fyz.yellowconfig.Config;
 import sh.fyz.yellowconfig.ConfigField;
 
+import java.security.SecureRandom;
+import java.util.Base64;
+
 public class FiberConfig extends Config {
+
+    private static final String DEFAULT_SECRET = "your-secret-key-please-dont-use-that-in-prod";
+    private static final int MIN_SECRET_LENGTH = 32;
 
     public FiberConfig() {
         loadInstance("fiberconfig", "Fiber", this);
+        validate();
     }
 
     @ConfigField
-    private String JWT_SECRET_KEY = "your-secret-key-please-dont-use-that-in-prod";
+    private String JWT_SECRET_KEY = DEFAULT_SECRET;
 
     @ConfigField
-    private long JWT_TOKEN_VALIDITY = 3600000; // 1 hour in milliseconds
+    private long JWT_TOKEN_VALIDITY = 3600000;
 
     @ConfigField
-    private long JWT_REFRESH_TOKEN_VALIDITY = 7 * 24 * 3600000; // 7 days in milliseconds
+    private long JWT_REFRESH_TOKEN_VALIDITY = 7 * 24 * 3600000;
+
+    private void validate() {
+        if (DEFAULT_SECRET.equals(JWT_SECRET_KEY) || JWT_SECRET_KEY == null || JWT_SECRET_KEY.length() < MIN_SECRET_LENGTH) {
+            byte[] randomBytes = new byte[48];
+            new SecureRandom().nextBytes(randomBytes);
+            JWT_SECRET_KEY = Base64.getEncoder().encodeToString(randomBytes);
+            System.err.println("[Fiber] WARNING: JWT secret was missing or insecure. A random secret has been generated. " +
+                    "Set a stable secret via FIBER_SECRET_KEY env variable or fiberconfig.json for production use.");
+        }
+    }
 
     public String getJwtSecretKey() {
         return JWT_SECRET_KEY;

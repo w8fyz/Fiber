@@ -1,6 +1,5 @@
 package sh.fyz.fiber.core.security.logging;
 
-import java.lang.reflect.Method;
 import java.util.Map;
 
 public class AuditLog {
@@ -16,6 +15,7 @@ public class AuditLog {
     private final Object requestBody;
     private final Map<String, Object> parameters;
     private final Object response;
+    private final Map<String, Object> customData;
     private final String rawLog;
 
     public AuditLog(
@@ -31,6 +31,7 @@ public class AuditLog {
             Object requestBody,
             Map<String, Object> parameters,
             Object response,
+            Map<String, Object> customData,
             String rawLog
     ) {
         this.timestamp = timestamp;
@@ -45,63 +46,25 @@ public class AuditLog {
         this.requestBody = requestBody;
         this.parameters = parameters;
         this.response = response;
+        this.customData = customData;
         this.rawLog = rawLog;
     }
 
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public String getIp() {
-        return ip;
-    }
-
-    public String getUserAgent() {
-        return userAgent;
-    }
-
-    public String getMethod() {
-        return method;
-    }
-
-    public String getUri() {
-        return uri;
-    }
-
-    public String getAction() {
-        return action;
-    }
-
-    public int getStatus() {
-        return status;
-    }
-
-    public Map<String, String> getQueryParams() {
-        return queryParams;
-    }
-
-    public Map<String, String> getPathVariables() {
-        return pathVariables;
-    }
-
-    public Object getRequestBody() {
-        return requestBody;
-    }
-
-    public Map<String, Object> getParameters() {
-        return parameters;
-    }
-
-    public Object getResponse() {
-        return response;
-    }
-
-    public String getRawLog() {
-        return rawLog;
-    }
+    public long getTimestamp() { return timestamp; }
+    public String getIp() { return ip; }
+    public String getUserAgent() { return userAgent; }
+    public String getMethod() { return method; }
+    public String getUri() { return uri; }
+    public String getAction() { return action; }
+    public int getStatus() { return status; }
+    public Map<String, String> getQueryParams() { return queryParams; }
+    public Map<String, String> getPathVariables() { return pathVariables; }
+    public Object getRequestBody() { return requestBody; }
+    public Map<String, Object> getParameters() { return parameters; }
+    public Object getResponse() { return response; }
+    public Map<String, Object> getCustomData() { return customData; }
+    public String getRawLog() { return rawLog; }
 
     @Override
-    public String toString() {
-        return rawLog;
-    }
+    public String toString() { return rawLog; }
 }
