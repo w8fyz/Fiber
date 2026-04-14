@@ -62,8 +62,23 @@ src/main/java/sh/fyz/fiber/
 │   │   │   ├── BasicAuthenticator.java         # OAuth2 client_id/client_secret via Basic
 │   │   │   ├── BearerAuthenticator.java        # Authorization: Bearer <jwt>
 │   │   │   └── CookieAuthenticator.java        # access_token cookie
-│   │   └── oauth2/                             # OAuth2 provider + client system
-│   ├── challenge/                              # Challenge/verify flow (email confirm, etc.)
+│   │   └── oauth2/
+│   │       ├── OAuth2Provider.java             # Interface: getProviderId, getAuthorizationUrl, processCallback, mapUserData
+│   │       ├── AbstractOAuth2Provider.java     # Base impl: code exchange, userInfo fetch, URL building
+│   │       ├── OAuth2AuthenticationService.java # Abstract: state store, provider registry, handleCallback
+│   │       ├── OAuth2ApplicationInfo.java      # Record: clientId + clientSecret (for server-side OAuth2)
+│   │       ├── OAuth2ApplicationAuthenticator.java # Interface for Basic auth → OAuth2ApplicationInfo
+│   │       ├── OAuth2ClientService.java        # Client registration, auth codes, token generation
+│   │       ├── OAuth2TokenResponse.java        # Token response DTO
+│   │       ├── impl/DiscordOAuth2Provider.java # Built-in Discord provider
+│   │       └── client/controller/OAuth2ClientController.java # GET /oauth/client/authorize, POST /oauth/client/token
+│   ├── challenge/
+│   │   ├── Challenge.java                     # Interface: id, userId, expiry, validateResponse, complete, fail
+│   │   ├── AbstractChallenge.java             # Base impl: UUID gen, expiry, metadata, DTOConvertible
+│   │   ├── ChallengeCallback.java             # Interface: onSuccess/onFailure → ResponseEntity
+│   │   ├── ChallengeStatus.java               # Enum: PENDING, COMPLETED, FAILED, EXPIRED, CANCELLED
+│   │   ├── ChallengeRegistry.java             # ConcurrentHashMap storage, validateChallenge, cleanup
+│   │   └── internal/ChallengeController.java  # POST /internal/challenge/verify/{challengeID}
 │   ├── dto/
 │   │   ├── DTOCache.java
 │   │   └── DTOConvertible.java                 # Interface: asDTO() auto-serialization
@@ -152,6 +167,36 @@ Key configuration methods (call before `start()`):
 
 Singleton access after construction: `FiberServer.get()`.
 
+### Configuration (`FiberConfig`)
+
+Loaded from `fiberconfig.json` (or env variables prefixed `FIBER_`). Fields:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `JWT_SECRET_KEY` | (auto-generated) | HS256 signing key. If missing or < 32 chars, a random 48-byte key is generated at startup with a warning. Set via `FIBER_SECRET_KEY` env var or `fiberconfig.json` |
+| `JWT_TOKEN_VALIDITY` | `3600000` (1h) | Access token lifetime in ms |
+| `JWT_REFRESH_TOKEN_VALIDITY` | `604800000` (7d) | Refresh token lifetime in ms |
+
+### Request Processing Pipeline
+
+For each incoming request, `RouterServlet.service()` executes:
+
+1. **OPTIONS** → `CorsService.handlePreflightRequest()` → return
+2. **CORS** → `CorsService.configureCorsHeaders()` → 403 if origin blocked
+3. **Route matching** → iterate `EndpointRegistry`, match by path + HTTP method, prefer fewest path variables
+4. **Rate limiting** → `RateLimitProcessor.process()` → 429 if exceeded
+5. **Security pipeline** (`EndpointHandler` → `SecurityPipeline.execute()`):
+   a. **CSRF** → `CsrfMiddleware.handle()` (skipped if `@NoCSRF`)
+   b. **Basic auth** → only for OAuth2 endpoints needing `OAuth2ApplicationInfo`
+   c. **User auth** → `AuthResolver.resolveUser()` tries each registered `Authenticator` for the accepted `AuthScheme`s
+   d. **Permissions** → `PermissionProcessor.process()` checks `@RequireRole` / `@Permission` (method-level then class-level)
+6. **Middleware** → all registered `Middleware` in priority order
+7. **Parameter resolution** → `ParameterResolver` iterates `ParameterHandlerRegistry` handlers
+8. **Method invocation** → controller method called via reflection
+9. **Audit log** → if `@AuditLog` present, `AuditLogProcessor.logAuditEvent()` + `AuditContext` collection
+10. **Rate limit success** → if status 200, `RateLimitProcessor.onSuccess()` resets counter
+11. **Cleanup** → `AuditContext.clear()`, `SessionContext.clear()` in `finally`
+
 ## Creating Controllers
 
 ```java
@@ -186,10 +231,10 @@ Controllers can be registered by class (`server.registerController(UserControlle
 ### Path Matching
 
 - Static: `/users/me`
-- Parameterized: `/users/{id}`
+- Parameterized: `/users/{id}` — `{name}` segments become named regex groups
 - Wildcard: `/docs/css/*`
-- Paths are normalized: `//` → `/`, trailing slashes removed.
-- When multiple patterns match, the most specific (fewest path variables) wins.
+- Paths are normalized via `EndpointHandler.normalizePath()`: `//` → `/`, trailing slashes removed, leading `/` ensured
+- **Priority resolution**: when multiple patterns match the same URL (e.g., `/blog/rss` matches both `/blog/rss` and `/blog/{slug}`), the endpoint with the fewest path variables wins. This is tracked by `pathVariableCount` on each `EndpointHandler`.
 
 ## Parameter Injection
 
@@ -229,6 +274,9 @@ Body handling:
 - `byte[]` → raw binary via `OutputStream` (for images, files, etc.)
 - `String` → wrapped in `{"uri":..., "status":..., "message":...}`
 - Any other object → Jackson JSON serialization
+- If body implements `DTOConvertible`, `asDTO()` is called before serialization
+
+**Important**: `ResponseEntity.write()` checks `resp.isCommitted()` before writing. If the response is already committed (e.g., by a callback), it skips writing. Methods return `this` for fluent chaining: `.header(name, value)`, `.contentType(type)`.
 
 ## Authentication
 
@@ -306,24 +354,115 @@ public ResponseEntity<?> data(@AuthenticatedUser User user) { ... }
 
 Default (no `@AuthType`): if `@AuthenticatedUser` is present → `COOKIE` only.
 
-### Roles
+### OAuth2 — Social Login (Provider)
+
+Allows users to authenticate via external providers (Discord, Google, etc.).
+
+**Setup:**
 
 ```java
-public class AdminRole extends Role {
-    public AdminRole() { super("admin"); }
-    @Override protected void initializePermissions() {
-        addPermission("users.manage");
-        addPermission("settings.edit");
+OAuth2AuthenticationService<User> oauthService = new MyOAuth2Service(authService, userRepo);
+oauthService.registerProvider(new DiscordOAuth2Provider<>("clientId", "secret"));
+server.setOAuthService(oauthService);
+```
+
+**Implement `OAuth2AuthenticationService`** (abstract):
+
+```java
+public class MyOAuth2Service extends OAuth2AuthenticationService<User> {
+    public MyOAuth2Service(AuthenticationService<User> authService, GenericRepository<User> repo) {
+        super(authService, repo);
     }
-    @Override protected void initializeParentRoles() {
-        addParentRole("user"); // inherits all "user" permissions
+
+    @Override
+    protected ResponseContext<User> findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<User> provider) {
+        String externalId = (String) userInfo.get(provider.getIdField());
+        User existing = userRepo.query().where("discordId", externalId).findFirst();
+        if (existing != null) return new ResponseContext<>(existing);
+        User newUser = new User();
+        provider.mapUserData(userInfo, newUser);
+        userRepo.save(newUser);
+        return new ResponseContext<>(newUser);
     }
 }
 ```
 
+**Create a custom provider** by extending `AbstractOAuth2Provider`:
+
+```java
+public class MyDiscordProvider extends DiscordOAuth2Provider<User> {
+    public MyDiscordProvider(String clientId, String secret) {
+        super(clientId, secret);
+    }
+
+    @Override
+    public void mapUserData(Map<String, Object> userInfo, User user) {
+        user.setDiscordId((String) userInfo.get("id"));
+        user.setUsername((String) userInfo.get("username"));
+        user.setEmail((String) userInfo.get("email"));
+    }
+}
+```
+
+**Flow**: your controller calls `oauthService.getAuthorizationUrl(providerId, redirectUri)` → user redirected → callback calls `oauthService.handleCallback(code, state, redirectUri, req, resp)` → cookies set automatically if `findOrCreateUser` returns a user without a state.
+
+Built-in provider: `DiscordOAuth2Provider`. For others, extend `AbstractOAuth2Provider` with the provider's authorization/token/userInfo endpoints.
+
+### OAuth2 — Client Credentials (Server)
+
+Fiber can act as an OAuth2 authorization server, allowing third-party apps to access your API on behalf of users.
+
+**Setup:**
+
+```java
+GenericRepository<OAuth2Client> clientRepo = new GenericRepository<>(OAuth2Client.class);
+server.setOauthClientService(new OAuth2ClientService(clientRepo));
+```
+
+This auto-registers `OAuth2ClientController` at `/oauth/client/` with two endpoints:
+- `GET /oauth/client/authorize?client_id=...&redirect_uri=...&response_type=code&state=...` — authorization endpoint (redirects to login if unauthenticated, then redirects back with `code`)
+- `POST /oauth/client/token?code=...` — token exchange (requires Basic auth with client credentials)
+
+**Client registration** (server-side):
+
+```java
+OAuth2Client client = server.getOauthClientService().registerClient("My App", "https://myapp.com/callback");
+// client.getClientId(), client.getClientSecret()
+```
+
+**Token exchange** uses `OAuth2ApplicationInfo` which is resolved via `BasicAuthenticator` from the `Authorization: Basic <base64(clientId:clientSecret)>` header.
+
+Authorization codes are single-use, expire after 10 minutes, and are stored in-memory with scheduled cleanup.
+
+### Roles
+
+```java
+public class UserRole extends Role {
+    public UserRole() { super("user"); }
+    @Override public void initializePermissions() {
+        addPermission("profile.view");
+        addPermission("profile.edit");
+    }
+    @Override public void initializeParentRoles() {}
+}
+
+public class AdminRole extends Role {
+    public AdminRole() { super("admin"); }
+    @Override public void initializePermissions() {
+        addPermission("users.manage");
+        addPermission("settings.edit");
+    }
+    @Override public void initializeParentRoles() {
+        addParentRole(new UserRole()); // inherits all "user" permissions — must pass Role instance, not String
+    }
+}
+```
+
+**IMPORTANT**: `addParentRole()` takes a `Role` instance, not a String. `initializeParentRoles()` must be `public` (not protected).
+
 Registration: `server.getRoleRegistry().registerRoleClasses(UserRole.class, AdminRole.class)`.
 
-Usage: `@RequireRole("admin")` or `@Permission({"users.manage"})`.
+Usage: `@RequireRole("admin")` on method or class level. `@Permission({"users.manage"})` for fine-grained control. `PermissionProcessor` checks method-level first, then class-level annotations.
 
 ## Sessions
 
@@ -584,20 +723,118 @@ Middleware executes after authentication/permissions but before parameter resolu
 
 ## Challenges
 
-For flows requiring user verification (email confirmation, 2FA, etc.):
+A challenge is a time-limited verification flow (email confirmation, 2FA code, CAPTCHA, etc.). The system stores challenges in-memory and exposes a single verification endpoint.
+
+### Architecture
+
+- `Challenge` — interface defining the contract (id, userId, expiry, status, validateResponse, complete, fail, metadata, callback)
+- `AbstractChallenge` — base class implementing common logic (UUID generation, expiry check, status management, metadata map). Extends `DTOConvertible` for serialization
+- `ChallengeCallback` — interface with `onSuccess` and `onFailure` returning `ResponseEntity<Object>`
+- `ChallengeStatus` — enum: `PENDING`, `COMPLETED`, `FAILED`, `EXPIRED`, `CANCELLED`
+- `ChallengeRegistry` — in-memory `ConcurrentHashMap<String, Challenge>` storage + validation logic
+- `ChallengeController` — internal endpoint `POST /internal/challenge/verify/{challengeID}`
+
+### Creating a Challenge
+
+Extend `AbstractChallenge` and implement `validateResponse`:
 
 ```java
-Challenge challenge = server.registerChallenge(myChallenge, new ChallengeCallback() {
-    @Override public void onSuccess(Challenge c, HttpServletRequest req, HttpServletResponse resp) {
-        // Verification succeeded
+public class EmailVerificationChallenge extends AbstractChallenge {
+    private final String expectedCode;
+
+    public EmailVerificationChallenge(Object userId, String code) {
+        super(userId, Instant.now().plus(Duration.ofMinutes(15)));
+        this.expectedCode = code;
+        addMetadata("type", "email_verification");
     }
-    @Override public void onFailure(Challenge c, String reason, HttpServletRequest req, HttpServletResponse resp) {
-        // Verification failed
+
+    @Override
+    public boolean validateResponse(Object response) {
+        if (response instanceof Map<?, ?> map) {
+            return expectedCode.equals(map.get("code"));
+        }
+        return false;
     }
-});
+}
 ```
 
-Verify via `POST /internal/challenge/verify/{challengeId}` with JSON body containing the response.
+`AbstractChallenge` provides:
+- Auto-generated UUID `id`
+- `createdAt` = `Instant.now()`
+- `status` starts as `PENDING`
+- `complete()` → sets status to `COMPLETED`, calls `callback.onSuccess()`
+- `fail()` → sets status to `FAILED`, calls `callback.onFailure(this, "INVALID_RESPONSE", ...)`
+- `setStatus(EXPIRED, ...)` → calls `callback.onFailure(this, "EXPIRED", ...)`
+- `addMetadata(key, value)` — attach arbitrary data to the challenge
+- `asDTO()` — serializes public fields (metadata and callback are `@IgnoreDTO`)
+
+### Registering a Challenge
+
+```java
+String verificationCode = "123456";
+EmailVerificationChallenge challenge = new EmailVerificationChallenge(user.getId(), verificationCode);
+
+Challenge registered = server.registerChallenge(challenge, new ChallengeCallback() {
+    @Override
+    public ResponseEntity<Object> onSuccess(Challenge c, HttpServletRequest req, HttpServletResponse resp) {
+        userService.markEmailVerified(c.getUserId());
+        return ResponseEntity.ok(Map.of("verified", true));
+    }
+
+    @Override
+    public ResponseEntity<Object> onFailure(Challenge c, String reason, HttpServletRequest req, HttpServletResponse resp) {
+        return ResponseEntity.badRequest(Map.of("error", reason));
+    }
+});
+
+// Send the challenge ID to the user (e.g., in an email link or API response)
+String challengeId = registered.getId();
+```
+
+`registerChallenge`:
+1. On first call, auto-registers `ChallengeController` at `/internal/challenge/`
+2. Attaches the callback to the challenge
+3. Stores the challenge in `ChallengeRegistry` (keyed by UUID)
+4. Returns the challenge (with its generated `id`)
+
+### Verification Flow
+
+Client sends: `POST /internal/challenge/verify/{challengeId}`
+
+```json
+{"code": "123456"}
+```
+
+The `ChallengeController` (annotated with `@AuditLog(action = "CHALLENGE_VERIFICATION")`) does:
+1. Looks up the challenge by ID → 404 if not found
+2. Calls `challengeRegistry.validateChallenge()`:
+   - If expired → sets status `EXPIRED`, calls `onFailure("EXPIRED")`, returns 410
+   - If `validateResponse()` returns true → calls `complete()` → `onSuccess()` → returns success response
+   - If `validateResponse()` returns false → calls `fail()` → `onFailure("INVALID_RESPONSE")` → returns failure response
+3. If the callback returns null → returns 410 "Challenge expired"
+
+### Lifecycle
+
+```
+PENDING → validateResponse(true)  → COMPLETED  (onSuccess called)
+PENDING → validateResponse(false) → FAILED     (onFailure called with "INVALID_RESPONSE")
+PENDING → isExpired()             → EXPIRED    (onFailure called with "EXPIRED")
+PENDING → manual                  → CANCELLED
+```
+
+### Cleanup
+
+Challenges are NOT auto-removed after completion/failure. Call `ChallengeRegistry` methods manually:
+- `removeChallenge(id)` — remove a specific challenge
+- `cleanupExpiredChallenges()` — remove all expired challenges
+
+For production, schedule periodic cleanup:
+
+```java
+scheduler.scheduleAtFixedRate(
+    () -> server.getChallengeRegistry().cleanupExpiredChallenges(),
+    1, 1, TimeUnit.HOURS);
+```
 
 ## DTOConvertible
 
@@ -618,18 +855,41 @@ Pre-cache at startup: `server.preloadDto()`.
 
 ## Key Rules
 
+### Lifecycle
 - Always call `server.start()` after all configuration is done.
-- Register authenticators on `server.getAuthResolver()` before handling requests.
+- `FiberServer.get()` is available after the constructor returns (singleton).
+- Register authenticators on `server.getAuthResolver()` (Cookie + Bearer are registered by default).
 - Middleware added after controller registration won't apply to already-registered endpoints.
+- `registerController(Class<?>)` requires a no-arg constructor; `registerController(Object)` uses the provided instance.
+
+### Authentication & Sessions
 - `SessionService` is optional — without it, auth is pure stateless JWT and session methods on `UserAuth` throw `IllegalStateException`.
 - Both `AuthenticationService` and `SessionService` use Caffeine caches (30s TTL). `getUserById()` requires manual `evictUser(id)` after mutations outside the service. `SessionService` invalidates its cache automatically on all write operations.
-- JWT secret must be at least 32 characters in production (auto-generated if default/short).
-- `FiberServer.get()` is available after the constructor returns (singleton).
+- JWT secret must be at least 32 characters in production (auto-generated with warning if default/short). Configure via `FIBER_SECRET_KEY` env var or `fiberconfig.json`.
+- JWT tokens embed `sessionId` in claims when `SessionService` is configured. `User-Agent` is also embedded and validated on each request.
+
+### Routing & Parameters
 - Path variables use `{name}` syntax and are extracted as named regex groups.
+- When multiple patterns match, the endpoint with fewest path variables wins.
 - `@RequestBody` validation errors return 400 automatically.
+- `@Param` supports `required = false` for optional query parameters.
+
+### Security
 - `@RateLimit` counter resets on successful (200) responses. Supports `slidingWindow`, `perUser`, `key` for shared buckets, and class-level application.
-- `@AuditLog` supports custom data via `AuditContext.put(key, value)` inside endpoints. `AuditContext` is cleared automatically per request.
+- `@AuditLog` supports custom data via `AuditContext.put(key, value)` inside endpoints. `AuditContext` is cleared automatically per request via `RouterServlet.finally`.
+- `@RequireRole` and `@Permission` are checked at both method and class level (method takes priority).
+- `addParentRole()` in `Role` takes a `Role` instance, not a String. `initializeParentRoles()` must be `public`.
+
+### Challenges
+- Challenges are stored in-memory (`ConcurrentHashMap`), NOT in the database.
+- Challenges are NOT auto-removed after completion/failure — call `removeChallenge(id)` or schedule `cleanupExpiredChallenges()`.
+- `ChallengeController` is auto-registered on first `registerChallenge()` call.
+- The callback's `ResponseEntity` return value is sent directly to the client as the verification response.
+
+### File Uploads & Other
 - File upload filenames are automatically sanitized against path traversal.
+- Chunked uploads use `uploadId`, `chunkIndex`, `totalChunks` query params. Incomplete uploads auto-cleaned after 24h.
+- `DTOConvertible.asDTO()` excludes fields annotated with `@IgnoreDTO` and null fields. Pre-cache with `server.preloadDto()`.
 
 ## Installation
 

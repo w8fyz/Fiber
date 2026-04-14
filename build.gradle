@@ -1,12 +1,30 @@
 plugins {
-    id 'maven-publish'
-    id 'java'
+    id 'java-library'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'me.champeau.jmh' version '0.7.2'
+    id "com.vanniktech.maven.publish" version "0.36.0"
 }
 
 group = 'sh.fyz'
 version = '2.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-parameters']
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
 
 repositories {
     mavenLocal()
@@ -14,7 +32,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'sh.fyz:Architect:2.0.0'
+    api 'sh.fyz:Architect:2.0.0'
+
     implementation 'org.postgresql:postgresql:42.7.8'
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 
@@ -42,17 +61,46 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.11.4'
 }
 
+mavenPublishing {
+    publishToMavenCentral()
+
+    pom {
+        name = 'Fiber'
+        description = 'A modern Java 21+ framework for building RESTful APIs on top of Jetty. Built-in JWT authentication, OAuth2, CORS, CSRF, rate limiting, sessions, validation, file uploads, and audit logging.'
+        url = 'https://fyz.sh'
+        licenses {
+            license {
+                name = 'MIT License'
+                url = 'https://opensource.org/licenses/MIT'
+            }
+        }
+        developers {
+            developer {
+                id = "fyz"
+                name = "Thibeau Benet"
+                url = "https://github.com/w8fyz"
+            }
+        }
+        scm {
+            url = "https://github.com/w8fyz/Fiber"
+            connection = "scm:git:git://github.com/w8fyz/Fiber.git"
+            developerConnection = "scm:git:ssh://git@github.com/w8fyz/Fiber.git"
+        }
+    }
+
+    signAllPublications()
+}
+
+signing {
+    useGpgCmd()
+}
+
 test {
     useJUnitPlatform()
     testLogging {
         events 'passed', 'skipped', 'failed'
         showStandardStreams = true
     }
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
 }
 
 jmh {
@@ -70,4 +118,3 @@ shadowJar {
         )
     }
 }
-publish.dependsOn shadowJar
