@@ -81,7 +81,7 @@ src/main/java/sh/fyz/fiber/
 │   │   └── internal/ChallengeController.java  # POST /internal/challenge/verify/{challengeID}
 │   ├── dto/
 │   │   ├── DTOCache.java
-│   │   └── DTOConvertible.java                 # Interface: asDTO() auto-serialization
+│   │   └── DTOConvertible.java                 # Abstract class: asDTO() auto-serialization
 │   ├── email/
 │   │   ├── Email.java                          # Email model (to, subject, html, attachments)
 │   │   ├── EmailService.java                   # SMTP sender (async, templates)
@@ -838,20 +838,23 @@ scheduler.scheduleAtFixedRate(
 
 ## DTOConvertible
 
-Auto-serialize entities excluding sensitive fields:
+`DTOConvertible` is an **abstract class** (not an interface). Entities **extend** it to get automatic `asDTO()` serialization that excludes `@IgnoreDTO` and null fields.
 
 ```java
 @Entity @Table(name = "users")
-public class User implements IdentifiableEntity, UserAuth, DTOConvertible {
+public class User extends DTOConvertible implements IdentifiableEntity, UserAuth {
     private String name;
     private String email;
     @IgnoreDTO private String password; // excluded from asDTO()
 
     // asDTO() returns Map<String, Object> of all non-@IgnoreDTO, non-null fields
+    // Nested DTOConvertible objects, collections, arrays, and maps are recursively converted
 }
 ```
 
-Pre-cache at startup: `server.preloadDto()`.
+`asDTO()` calls `transform()` first (override to mutate fields before serialization). Field resolution uses cached reflection (`getCachedFields()`) and walks the class hierarchy up to `Object`.
+
+Pre-cache at startup: `server.preloadDto()` — scans classpath for all `DTOConvertible` subclasses and warms the field cache.
 
 ## Key Rules
 
@@ -889,7 +892,7 @@ Pre-cache at startup: `server.preloadDto()`.
 ### File Uploads & Other
 - File upload filenames are automatically sanitized against path traversal.
 - Chunked uploads use `uploadId`, `chunkIndex`, `totalChunks` query params. Incomplete uploads auto-cleaned after 24h.
-- `DTOConvertible.asDTO()` excludes fields annotated with `@IgnoreDTO` and null fields. Pre-cache with `server.preloadDto()`.
+- `DTOConvertible` is an abstract class (extend, not implement). `asDTO()` excludes `@IgnoreDTO` and null fields, recursively converts nested `DTOConvertible` objects. Pre-cache with `server.preloadDto()`.
 
 ## Installation
 
