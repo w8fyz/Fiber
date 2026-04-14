@@ -37,11 +37,11 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v3
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Run tests
         run: ./gradlew test
-
-      - name: Run benchmarks
-        run: ./gradlew jmh
 
       - name: Upload test results
         if: always()
