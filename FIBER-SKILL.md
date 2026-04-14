@@ -356,7 +356,9 @@ Control which auth schemes an endpoint accepts:
 public ResponseEntity<?> data(@AuthenticatedUser User user) { ... }
 ```
 
-Default (no `@AuthType`): if `@AuthenticatedUser` is present → `COOKIE` only.
+Default (no `@AuthType`):
+- If `@AuthenticatedUser` is present → `COOKIE` only
+- If `@RequireRole` or `@Permission` is present (on method or class) → `COOKIE` + `BEARER` (authentication is implicitly required)
 
 ### OAuth2 — Social Login (Provider)
 

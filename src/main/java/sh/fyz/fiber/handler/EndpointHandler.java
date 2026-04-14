@@ -95,6 +95,14 @@ public class EndpointHandler extends HttpServlet {
             }
         }
 
+        boolean requiresAuth = method.isAnnotationPresent(sh.fyz.fiber.annotations.security.RequireRole.class)
+                || method.isAnnotationPresent(sh.fyz.fiber.annotations.security.Permission.class)
+                || method.getDeclaringClass().isAnnotationPresent(sh.fyz.fiber.annotations.security.RequireRole.class)
+                || method.getDeclaringClass().isAnnotationPresent(sh.fyz.fiber.annotations.security.Permission.class);
+        if (requiresAuth) {
+            return new HashSet<>(Set.of(AuthScheme.COOKIE, AuthScheme.BEARER));
+        }
+
         return Collections.emptySet();
     }
 
