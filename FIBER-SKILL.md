@@ -163,7 +163,7 @@ Key configuration methods (call before `start()`):
 - `addMiddleware(Middleware)` — global middleware
 - `registerController(Object)` or `registerController(Class<?>)` — register controllers
 - `preloadDto()` — pre-cache DTOConvertible fields for faster first requests
-- `start()` / `stop()`
+- `start()` / `stop()` — both throw checked `Exception`
 
 Singleton access after construction: `FiberServer.get()`.
 
@@ -673,15 +673,33 @@ server.setAuditLogService(new MyLogService());
 public ResponseEntity<?> upload(
         @FileUpload(maxSize = 10_485_760, allowedMimeTypes = {"image/*", "application/pdf"})
         UploadedFile file) {
-
-    file.moveTo(Path.of("uploads/" + file.getOriginalFilename()));
-    return ResponseEntity.ok(Map.of("name", file.getOriginalFilename(), "size", file.getSize()));
+    try {
+        file.moveTo(Path.of("uploads/" + file.getOriginalFilename()));
+        return ResponseEntity.ok(Map.of("name", file.getOriginalFilename(), "size", file.getSize()));
+    } catch (IOException e) {
+        return ResponseEntity.serverError(Map.of("error", "Failed to save file"));
+    }
 }
 ```
 
-Chunked uploads: client sends `uploadId`, `chunkIndex`, `totalChunks` as query params. Chunks are assembled server-side. Incomplete uploads are auto-cleaned after 24h.
+### UploadedFile API
 
-Filenames are sanitized (path separators, special characters removed).
+| Method | Throws | Description |
+|--------|--------|-------------|
+| `moveTo(Path destination)` | `IOException` | Move temp file to final location. Throws `IllegalStateException` if chunked upload is incomplete |
+| `cleanup()` | `IOException` | Delete the temp file |
+| `getInputStream()` | `IOException` | Read the file content |
+| `getOriginalFilename()` | — | Sanitized filename |
+| `getContentType()` | — | MIME type |
+| `getSize()` | — | File size in bytes |
+| `isComplete()` | — | True if all chunks received |
+| `getUploadId()` | — | UUID for chunked uploads |
+
+**Important**: `moveTo()` and `cleanup()` throw checked `IOException` — always wrap in try-catch.
+
+Chunked uploads: client sends `uploadId`, `chunkIndex`, `totalChunks` as query params. Chunks are assembled server-side via `addChunk(Part, int)` (must be in order). Incomplete uploads are auto-cleaned after 24h.
+
+Filenames are sanitized: path separators (`/`, `\`), `..` sequences removed, only `[a-zA-Z0-9._-]` kept.
 
 ## Email
 
@@ -857,6 +875,8 @@ public class User extends DTOConvertible implements IdentifiableEntity, UserAuth
 Pre-cache at startup: `server.preloadDto()` — scans classpath for all `DTOConvertible` subclasses and warms the field cache.
 
 ## Key Rules
+
+### Database / Entities
 
 ### Lifecycle
 - Always call `server.start()` after all configuration is done.
