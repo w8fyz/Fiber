@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 public class SecurityHeadersFilter implements Filter {
-    private static String serverHeader = "Fiber - A Fyz Project";
+    private static String serverHeader = "Fiber";
 
     public static void setServerHeader(String header) {
         serverHeader = header;

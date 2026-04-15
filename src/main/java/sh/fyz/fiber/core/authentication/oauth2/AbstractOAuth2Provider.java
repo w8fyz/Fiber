@@ -6,12 +6,15 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import sh.fyz.fiber.util.FiberObjectMapper;
 
+import java.net.InetAddress;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.net.URLDecoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,7 +22,7 @@ import java.util.stream.Collectors;
 
 /**
  * Abstract base class for OAuth2 providers with common functionality.
- * 
+ *
  * @param <T> The type of user entity used in the application
  */
 public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAuth2Provider<T> {
@@ -31,37 +34,60 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
     protected final String userInfoEndpoint;
     protected final String defaultScope;
     private static final ObjectMapper OBJECT_MAPPER = new FiberObjectMapper();
+    private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(10);
 
-    protected AbstractOAuth2Provider(String clientId, String clientSecret, 
-                                   String authorizationEndpoint, String tokenEndpoint, 
+    protected AbstractOAuth2Provider(String clientId, String clientSecret,
+                                   String authorizationEndpoint, String tokenEndpoint,
                                    String userInfoEndpoint, String defaultScope) {
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(HTTP_TIMEOUT)
+                .build();
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.authorizationEndpoint = authorizationEndpoint;
         this.tokenEndpoint = tokenEndpoint;
         this.userInfoEndpoint = userInfoEndpoint;
         this.defaultScope = defaultScope;
+
+        validateEndpointUrl(tokenEndpoint, "tokenEndpoint");
+        validateEndpointUrl(userInfoEndpoint, "userInfoEndpoint");
+    }
+
+    private static void validateEndpointUrl(String url, String name) {
+        try {
+            URI uri = URI.create(url);
+            String scheme = uri.getScheme();
+            if (scheme == null || (!scheme.equals("https") && !scheme.equals("http"))) {
+                throw new IllegalArgumentException("OAuth2 " + name + " must use HTTP(S): " + url);
+            }
+            String host = uri.getHost();
+            if (host != null) {
+                InetAddress addr = InetAddress.getByName(host);
+                if (addr.isLoopbackAddress() || addr.isSiteLocalAddress() || addr.isLinkLocalAddress()) {
+                    throw new IllegalArgumentException("OAuth2 " + name + " must not target private/loopback addresses: " + url);
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid OAuth2 " + name + " URL: " + url, e);
+        }
     }
 
     protected String buildAuthorizationUrl(String state, String redirectUri, String scope) {
         try {
-            // Create a map of parameters that can be customized by subclasses
             Map<String, String> params = new HashMap<>();
             params.put("client_id", clientId);
             params.put("redirect_uri", redirectUri);
             params.put("response_type", "code");
             params.put("scope", scope);
             params.put("state", state);
-            
-            // Allow subclasses to add or modify parameters
+
             customizeAuthorizationParams(params);
-            
-            // Build the URL with all parameters
+
             StringBuilder url = new StringBuilder(authorizationEndpoint);
             url.append("?");
-            
-            // Add all parameters to the URL
+
             String paramString = params.entrySet().stream()
                 .map(entry -> {
                     try {
@@ -72,32 +98,21 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
                     }
                 })
                 .collect(Collectors.joining("&"));
-            
+
             url.append(paramString);
             return url.toString();
         } catch (Exception e) {
             throw new RuntimeException("Failed to build authorization URL", e);
         }
     }
-    
-    /**
-     * Allow subclasses to customize the authorization parameters.
-     * This method can be overridden to add provider-specific parameters or modify existing ones.
-     * 
-     * @param params The map of parameters to customize
-     */
+
     protected void customizeAuthorizationParams(Map<String, String> params) {
-        // Default implementation does nothing
-        // Subclasses can override this to add or modify parameters
     }
 
     @Override
     public Map<String, Object> processCallback(String code, String redirectUri) {
         try {
-            // Exchange code for token
             String accessToken = exchangeCodeForToken(code, redirectUri);
-            
-            // Get user info using the access token
             return getUserInfoFromToken(accessToken);
         } catch (Exception e) {
             throw new RuntimeException("Failed to process OAuth callback", e);
@@ -117,19 +132,19 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
                 URLEncoder.encode(code, StandardCharsets.UTF_8),
                 URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(java.net.URI.create(tokenEndpoint))
+                .uri(URI.create(tokenEndpoint))
                 .header("Authorization", "Basic " + credentials)
                 .header("Content-Type", "application/x-www-form-urlencoded")
+                .timeout(HTTP_TIMEOUT)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            
+
             if (response.statusCode() != 200) {
                 throw new RuntimeException("Failed to exchange code for token: " + response.body());
             }
 
-            // Parse the JSON response
             Map<String, String> tokenData = parseJsonResponse(response.body());
             return tokenData.get("access_token");
         } catch (Exception e) {
@@ -140,13 +155,14 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
     protected Map<String, Object> getUserInfoFromToken(String accessToken) {
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(java.net.URI.create(userInfoEndpoint))
+                .uri(URI.create(userInfoEndpoint))
                 .header("Authorization", "Bearer " + accessToken)
+                .timeout(HTTP_TIMEOUT)
                 .GET()
                 .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            
+
             if (response.statusCode() != 200) {
                 throw new RuntimeException("Failed to get user info: " + response.body());
             }
@@ -167,7 +183,7 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
             throw new RuntimeException("Failed to parse JSON response", e);
         }
     }
-    
+
     protected Map<String, Object> parseJsonResponseToMap(String json) {
         try {
             if (json != null && json.trim().startsWith("{")) {
@@ -198,4 +214,4 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
         }
         return map;
     }
-} 
+}

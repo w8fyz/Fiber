@@ -13,19 +13,12 @@ import java.util.Map;
 
 public class RateLimitProcessor {
 
-    /**
-     * Resolves the effective @RateLimit — method-level takes precedence over class-level.
-     */
     private static RateLimit resolveRateLimit(Method method) {
         RateLimit rl = method.getAnnotation(RateLimit.class);
         if (rl != null) return rl;
         return method.getDeclaringClass().getAnnotation(RateLimit.class);
     }
 
-    /**
-     * Builds the identifier used as rate-limit key. If perUser is true and a UserAuth
-     * argument is present, uses userId; otherwise falls back to client IP.
-     */
     private static String resolveIdentifier(RateLimit rateLimit, Object[] args, HttpServletRequest request) {
         if (rateLimit.perUser() && args != null) {
             for (Object arg : args) {
@@ -59,9 +52,13 @@ public class RateLimitProcessor {
     }
 
     public static void onSuccess(Method method, HttpServletRequest request) {
+        onSuccess(method, null, request);
+    }
+
+    public static void onSuccess(Method method, Object[] args, HttpServletRequest request) {
         RateLimit rateLimit = resolveRateLimit(method);
         if (rateLimit == null) return;
-        String identifier = "ip:" + HttpUtil.getClientIpAddress(request);
+        String identifier = resolveIdentifier(rateLimit, args, request);
         RateLimitInterceptor.resetRateLimit(identifier, method);
     }
 }

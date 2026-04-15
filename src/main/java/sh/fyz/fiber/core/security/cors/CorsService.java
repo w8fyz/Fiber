@@ -56,11 +56,31 @@ public class CorsService {
     }
 
     private boolean matchesWildcard(String pattern, String origin) {
-        String regex = pattern
-                .replace(".", "\\.")
-                .replace("?", "\\?")
-                .replace("*", ".*");
-        return origin.matches(regex);
+        int pi = 0, oi = 0;
+        int pLen = pattern.length(), oLen = origin.length();
+        int starIdx = -1, matchIdx = 0;
+
+        while (oi < oLen) {
+            if (pi < pLen && (pattern.charAt(pi) == origin.charAt(oi))) {
+                pi++;
+                oi++;
+            } else if (pi < pLen && pattern.charAt(pi) == '*') {
+                starIdx = pi;
+                matchIdx = oi;
+                pi++;
+            } else if (starIdx != -1) {
+                pi = starIdx + 1;
+                matchIdx++;
+                oi = matchIdx;
+            } else {
+                return false;
+            }
+        }
+
+        while (pi < pLen && pattern.charAt(pi) == '*') {
+            pi++;
+        }
+        return pi == pLen;
     }
 
     public boolean isOriginAllowed(String origin) {

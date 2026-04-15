@@ -7,11 +7,14 @@ import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Middleware for handling authentication.
  */
 public class AuthMiddleware {
+    private static final Logger logger = LoggerFactory.getLogger(AuthMiddleware.class);
     private static final String USER_ID_ATTRIBUTE = "userId";
 
     public static boolean process(HttpServletRequest req, HttpServletResponse resp) {
@@ -41,12 +44,11 @@ public class AuthMiddleware {
 
             // Extract user info from token
             Object userId = JwtUtil.extractId(token);
-            //System.out.println("Extracted user ID: " + userId);
             req.setAttribute(USER_ID_ATTRIBUTE, userId);
 
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Token validation failed for {}", req.getRequestURI(), e);
             ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
             return false;
         }
@@ -66,7 +68,6 @@ public class AuthMiddleware {
      * Get the current user ID from the request attributes
      */
     public static Object getCurrentUserId(HttpServletRequest req) {
-        //System.out.println("Getting current user ID from request attributes: " + req.getAttribute(USER_ID_ATTRIBUTE));
         return req.getAttribute(USER_ID_ATTRIBUTE);
     }
 } 

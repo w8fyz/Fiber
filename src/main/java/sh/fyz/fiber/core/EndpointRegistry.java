@@ -57,8 +57,9 @@ public class EndpointRegistry {
         // Use a composite key of path and HTTP method
         String key = path + ":" + httpMethod;
         if (endpoints.containsKey(key)) {
-            //System.out.println("Endpoint already registered: " + key);
-            return; // Skip if endpoint is already registered
+            org.slf4j.LoggerFactory.getLogger(EndpointRegistry.class)
+                .warn("Duplicate endpoint registration ignored: {} {}", httpMethod, path);
+            return;
         }
         endpoints.put(key, new EndpointHandler(controllerInstance, method, globalMiddleware, requiredRoles));
     }

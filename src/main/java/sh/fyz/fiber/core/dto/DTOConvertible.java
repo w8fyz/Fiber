@@ -84,8 +84,7 @@ public abstract class DTOConvertible {
                     dto.put(field.getName(), value);
                 }
 
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
+            } catch (IllegalAccessException ignored) {
             }
         }
         return dto;

@@ -2,11 +2,13 @@ package sh.fyz.fiber.core;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
@@ -15,25 +17,43 @@ import java.util.function.Function;
 
 /**
  * Utility class for handling JWT (JSON Web Token) operations.
+ * Uses lazy initialization to avoid static init ordering issues with FiberServer.
  */
 public class JwtUtil {
-    private static final String SECRET_KEY = System.getenv("FIBER_SECRET_KEY") != null ? System.getenv("FIBER_SECRET_KEY") : FiberServer.get().getConfig().getJwtSecretKey();
-    private static final long TOKEN_VALIDITY = System.getenv("FIBER_TOKEN_VALIDITY") != null ? Long.parseLong(System.getenv("FIBER_TOKEN_VALIDITY")) : FiberServer.get().getConfig().getJwtTokenValidity();
-    private static final long REFRESH_TOKEN_VALIDITY =  System.getenv("FIBER_REFRESH_TOKEN_VALIDITY") != null ? Long.parseLong(System.getenv("FIBER_REFRESH_TOKEN_VALIDITY")) : FiberServer.get().getConfig().getJwtRefreshTokenValidity();
-    private static final Key key = Keys.hmacShaKeyFor((SECRET_KEY).getBytes());
 
-    /**
-     * Generate a JWT token for a user
-     * @param userAuth The user to generate the token for
-     * @param ipAddress The IP address from which the token is generated
-     * @param userAgent The user agent from which the token is generated
-     * @return The generated JWT token
-     */
+    private static volatile Key key;
+    private static volatile JwtParser cachedParser;
+    private static volatile long tokenValidity;
+    private static volatile long refreshTokenValidity;
+    private static volatile boolean initialized = false;
+
+    private static void ensureInitialized() {
+        if (!initialized) {
+            synchronized (JwtUtil.class) {
+                if (!initialized) {
+                    String secret = System.getenv("FIBER_SECRET_KEY") != null
+                            ? System.getenv("FIBER_SECRET_KEY")
+                            : FiberServer.get().getConfig().getJwtSecretKey();
+                    key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+                    cachedParser = Jwts.parser().setSigningKey(key).build();
+                    tokenValidity = System.getenv("FIBER_TOKEN_VALIDITY") != null
+                            ? Long.parseLong(System.getenv("FIBER_TOKEN_VALIDITY"))
+                            : FiberServer.get().getConfig().getJwtTokenValidity();
+                    refreshTokenValidity = System.getenv("FIBER_REFRESH_TOKEN_VALIDITY") != null
+                            ? Long.parseLong(System.getenv("FIBER_REFRESH_TOKEN_VALIDITY"))
+                            : FiberServer.get().getConfig().getJwtRefreshTokenValidity();
+                    initialized = true;
+                }
+            }
+        }
+    }
+
     public static String generateToken(UserAuth userAuth, String ipAddress, String userAgent) {
         return generateToken(userAuth, ipAddress, userAgent, null);
     }
 
     public static String generateToken(UserAuth userAuth, String ipAddress, String userAgent, String sessionId) {
+        ensureInitialized();
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userAuth.getId());
         claims.put("ip", ipAddress);
@@ -42,21 +62,15 @@ public class JwtUtil {
         if (sessionId != null) {
             claims.put("sessionId", sessionId);
         }
-        return createToken(claims, TOKEN_VALIDITY);
+        return createToken(claims, tokenValidity);
     }
 
-    /**
-     * Generate a refresh token for a user
-     * @param userAuth The user to generate the token for
-     * @param ipAddress The IP address from which the token is generated
-     * @param userAgent The user agent from which the token is generated
-     * @return The generated refresh token
-     */
     public static String generateRefreshToken(UserAuth userAuth, String ipAddress, String userAgent) {
         return generateRefreshToken(userAuth, ipAddress, userAgent, null);
     }
 
     public static String generateRefreshToken(UserAuth userAuth, String ipAddress, String userAgent, String sessionId) {
+        ensureInitialized();
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userAuth.getId());
         claims.put("ip", ipAddress);
@@ -65,16 +79,11 @@ public class JwtUtil {
         if (sessionId != null) {
             claims.put("sessionId", sessionId);
         }
-        return createToken(claims, REFRESH_TOKEN_VALIDITY);
+        return createToken(claims, refreshTokenValidity);
     }
 
-    /**
-     * Create a JWT token with the given claims
-     * @param claims The claims to include in the token
-     * @param validity The validity period in milliseconds
-     * @return The generated JWT token
-     */
     public static String createToken(Map<String, Object> claims, long validity) {
+        ensureInitialized();
         return Jwts.builder()
                 .setClaims(claims)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
@@ -83,13 +92,6 @@ public class JwtUtil {
                 .compact();
     }
 
-    /**
-     * Validate a JWT token
-     * @param token The token to validate
-     * @param ipAddress The IP address from which the token is validated
-     * @param userAgent The user agent from which the token is validated
-     * @return true if the token is valid, false otherwise
-     */
     public static Claims validateToken(String token, String ipAddress, String userAgent) {
         try {
             Claims claims = extractAllClaims(token);
@@ -109,13 +111,6 @@ public class JwtUtil {
         }
     }
 
-    /**
-     * Validate a refresh token
-     * @param token The refresh token to validate
-     * @param ipAddress The IP address from which the token is validated
-     * @param userAgent The user agent from which the token is validated
-     * @return true if the token is valid, false otherwise
-     */
     public static boolean validateRefreshToken(String token, String ipAddress, String userAgent) {
         try {
             Claims claims = extractAllClaims(token);
@@ -123,12 +118,10 @@ public class JwtUtil {
             String tokenUserAgent = claims.get("userAgent", String.class);
             String tokenType = claims.get("type", String.class);
 
-            // Validate token type and expiration
             if (!"refresh".equals(tokenType) || isTokenExpired(claims)) {
                 return false;
             }
 
-            // Validate IP and User-Agent
             return tokenIp.equals(ipAddress) && tokenUserAgent.equals(userAgent);
         } catch (Exception e) {
             return false;
@@ -136,9 +129,8 @@ public class JwtUtil {
     }
 
     private static Claims extractAllClaims(String token) {
-        return Jwts.parser()
-                .setSigningKey(key)
-                .build()
+        ensureInitialized();
+        return cachedParser
                 .parseClaimsJws(token)
                 .getBody();
     }
@@ -147,23 +139,12 @@ public class JwtUtil {
         return claims.getExpiration().before(new Date());
     }
 
-    /**
-     * Extract a specific claim from a token
-     * @param token The token to extract the claim from
-     * @param claimsResolver The function to resolve the claim
-     * @return The extracted claim
-     */
     public static <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
     }
 
-    /**
-     * Extract the user ID from a token
-     * @param token The token to extract the ID from
-     * @return The user ID as an Object (can be Integer or String)
-     */
     public static Object extractId(String token) {
         return extractAllClaims(token).get("id");
     }
-} 
+}

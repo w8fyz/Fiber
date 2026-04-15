@@ -64,19 +64,26 @@ public class FileUploadManager {
         );
     }
 
+    private static final long COMPLETED_UPLOAD_TTL = 1; // hours
+
     private void cleanupOldUploads() {
         long now = System.currentTimeMillis();
         uploads.entrySet().removeIf(entry -> {
             UploadedFile file = entry.getValue();
-            if (!file.isComplete() && (now - file.getCreatedAt()) > MAX_UPLOAD_AGE * 3600000) {
+            long ageMs = now - file.getCreatedAt();
+            boolean shouldRemove = false;
+            if (!file.isComplete() && ageMs > MAX_UPLOAD_AGE * 3600000) {
+                shouldRemove = true;
+            } else if (file.isComplete() && ageMs > COMPLETED_UPLOAD_TTL * 3600000) {
+                shouldRemove = true;
+            }
+            if (shouldRemove) {
                 try {
                     file.cleanup();
-                } catch (Exception e) {
-                    // Ignorer les erreurs de nettoyage
+                } catch (Exception ignored) {
                 }
-                return true;
             }
-            return false;
+            return shouldRemove;
         });
     }
 

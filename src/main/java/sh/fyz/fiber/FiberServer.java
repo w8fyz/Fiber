@@ -3,6 +3,7 @@ package sh.fyz.fiber;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.config.FiberConfig;
@@ -18,6 +19,7 @@ import sh.fyz.fiber.core.email.EmailService;
 import sh.fyz.fiber.core.security.cors.CorsService;
 import sh.fyz.fiber.core.security.csrf.CsrfController;
 import sh.fyz.fiber.core.security.logging.AuditLogService;
+import sh.fyz.fiber.core.upload.FileUploadManager;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.handler.FiberErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
@@ -32,14 +34,22 @@ import sh.fyz.fiber.core.authentication.AuthResolver;
 import sh.fyz.fiber.core.authentication.impl.BasicAuthenticator;
 import sh.fyz.fiber.core.session.SessionService;
 import sh.fyz.fiber.handler.EndpointHandler;
+import sh.fyz.fiber.util.HttpUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ScanResult;
 
 import java.lang.reflect.Method;
+import java.net.InetAddress;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
 
 public class FiberServer {
+
+    private static final Logger logger = LoggerFactory.getLogger(FiberServer.class);
 
     private boolean isDev = false;
     private int port = -1;
@@ -67,6 +77,7 @@ public class FiberServer {
     private long maxFileSize = 50_000_000;
     private long maxRequestSize = 100_000_000;
     private int fileSizeThreshold = 1_000_000;
+    private boolean started = false;
 
     public FiberConfig getConfig() {
         return config;
@@ -80,9 +91,17 @@ public class FiberServer {
         instance = this;
         this.config = new FiberConfig();
         this.port = port;
-        this.server = new Server(port);
+
+        // P-08/P-09: Configure Jetty with virtual threads (Java 21)
+        QueuedThreadPool threadPool = new QueuedThreadPool();
+        threadPool.setVirtualThreadsExecutor(Executors.newVirtualThreadPerTaskExecutor());
+        this.server = new Server(threadPool);
+        org.eclipse.jetty.server.ServerConnector connector = new org.eclipse.jetty.server.ServerConnector(server);
+        connector.setPort(port);
+        server.addConnector(connector);
+
         this.context = new ServletContextHandler(ServletContextHandler.SESSIONS);
-        this.globalMiddleware = new ArrayList<>();
+        this.globalMiddleware = new CopyOnWriteArrayList<>();
         this.endpointRegistry = new EndpointRegistry(globalMiddleware);
         this.documentationController = new DocumentationController();
         this.documentationEnabled = false;
@@ -94,32 +113,19 @@ public class FiberServer {
         this.corsService = new CorsService();
         this.basicAuthenticator = new BasicAuthenticator();
 
-        // Initialize validation system
         ValidationInitializer.initialize();
-
-        // Initialize parameter handlers
         ParameterHandlerRegistry.initialize();
 
-
-        // Set up server
         server.setHandler(context);
-        
-        // Register security filter
         context.addFilter(SecurityHeadersFilter.class, "/*", null);
 
         if (enableDocumentation) enableDocumentation();
-
     }
 
     public void enableDevelopmentMode() {
-        //System.out.println("Development mode enabled");
         this.isDev = true;
     }
 
-    /*
-    * Preload DTO, will call all asDTO(); in the project, will cache all necessary fields resulting in faster response
-    * Even at first requests
-    * */
     public void preloadDto() {
         try (ScanResult scanResult = new ClassGraph()
                 .enableAnnotationInfo()
@@ -142,23 +148,29 @@ public class FiberServer {
         return instance;
     }
 
+    public FiberServer setTrustedProxies(List<String> proxies) {
+        HttpUtil.setTrustedProxies(proxies == null ? null : new HashSet<>(proxies));
+        return this;
+    }
+
     public void setCorsService(CorsService corsService) {
-        //System.out.println("Setting CORS service: " + corsService);
         this.corsService = corsService;
     }
 
     public CorsService getCorsService() {
         if (corsService == null) {
-            //Set default config if none is present
-            this.corsService = new CorsService()
-                    .addAllowedOrigin("http://localhost:"+port)
-                    .addAllowedOrigin("http://127.0.0.1:"+port)
-                    .addAllowedOrigin("http://localhost:3000")
-                    .addAllowedOrigin("http://127.0.0.1:3000")
+            CorsService defaultCors = new CorsService()
+                    .addAllowedOrigin("http://localhost:" + port)
+                    .addAllowedOrigin("http://127.0.0.1:" + port)
                     .setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"))
                     .setAllowedHeaders(Arrays.asList("Content-Type", "Authorization"))
                     .setAllowCredentials(true)
                     .setMaxAge(3600);
+            if (isDev) {
+                defaultCors.addAllowedOrigin("http://localhost:3000");
+                defaultCors.addAllowedOrigin("http://127.0.0.1:3000");
+            }
+            this.corsService = defaultCors;
         }
         return corsService;
     }
@@ -208,7 +220,7 @@ public class FiberServer {
     public void setOAuthService(OAuth2AuthenticationService<?> oauthService) {
         this.oauthService = oauthService;
     }
-    
+
     public OAuth2AuthenticationService<?> getOAuthService() {
         if (oauthService == null) {
             throw new IllegalStateException("OAuth2AuthenticationService has not been set");
@@ -216,17 +228,10 @@ public class FiberServer {
         return oauthService;
     }
 
-    /**
-     * Get the role registry for managing roles and permissions
-     */
     public RoleRegistry getRoleRegistry() {
         return roleRegistry;
     }
 
-    /**
-     * Register a controller class
-     * @param controllerClass The controller class to register
-     */
     public void registerController(Class<?> controllerClass) {
         endpointRegistry.registerController(controllerClass);
         if (documentationEnabled) {
@@ -234,10 +239,6 @@ public class FiberServer {
         }
     }
 
-    /**
-     * Register a controller instance
-     * @param controller The controller instance to register
-     */
     public void registerController(Object controller) {
         Class<?> controllerClass = controller.getClass();
         Controller annotation = controllerClass.getAnnotation(Controller.class);
@@ -279,13 +280,12 @@ public class FiberServer {
     private void enableDocumentation() {
         if (!documentationEnabled) {
             documentationEnabled = true;
-            
-            // Register API documentation endpoint
+
             Method apiMethod = null;
             Method uiMethod = null;
             Method cssMethod = null;
             Method jsMethod = null;
-            
+
             for (Method method : DocumentationController.class.getDeclaredMethods()) {
                 switch (method.getName()) {
                     case "getApiDocs" -> apiMethod = method;
@@ -298,30 +298,41 @@ public class FiberServer {
             if (apiMethod != null) {
                 endpointRegistry.registerEndpoint("/docs/api", RequestMapping.Method.GET, apiMethod, documentationController);
             }
-
             if (uiMethod != null) {
                 endpointRegistry.registerEndpoint("/docs/ui", RequestMapping.Method.GET, uiMethod, documentationController);
             }
-
             if (cssMethod != null) {
                 endpointRegistry.registerEndpoint("/docs/css/*", RequestMapping.Method.GET, cssMethod, documentationController);
             }
-
             if (jsMethod != null) {
                 endpointRegistry.registerEndpoint("/docs/js/*", RequestMapping.Method.GET, jsMethod, documentationController);
             }
         }
     }
 
-    /**
-     * Set the server header that will be sent in HTTP responses
-     * @param header The server header value to use
-     */
     public void setServerHeader(String header) {
-        sh.fyz.fiber.core.security.filters.SecurityHeadersFilter.setServerHeader(header);
+        SecurityHeadersFilter.setServerHeader(header);
     }
 
     public void start() throws Exception {
+        if (!isDev && config.isSecretAutoGenerated()) {
+            throw new IllegalStateException(
+                "[Fiber] JWT secret is required in production mode. " +
+                "Set FIBER_SECRET_KEY env variable or configure JWT_SECRET_KEY in fiberconfig.json (min 32 chars). " +
+                "Call enableDevelopmentMode() before start() for local development.");
+        }
+
+        if (isDev) {
+            try {
+                InetAddress bindAddr = InetAddress.getByName("0.0.0.0");
+                if (!bindAddr.isLoopbackAddress()) {
+                    logger.warn("[Fiber] Development mode is enabled on a non-loopback address. " +
+                            "Security features (Secure cookies, strict SameSite) are relaxed. " +
+                            "Do NOT use enableDevelopmentMode() in production.");
+                }
+            } catch (Exception ignored) {}
+        }
+
         ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry));
         holder.getRegistration().setMultipartConfig(
                 new jakarta.servlet.MultipartConfigElement(
@@ -331,11 +342,14 @@ public class FiberServer {
         );
         context.addServlet(holder, "/*");
         context.setErrorHandler(new FiberErrorHandler());
+        started = true;
         server.start();
     }
 
     public void stop() throws Exception {
         server.stop();
+        FileUploadManager.getInstance().shutdown();
+        started = false;
     }
 
     public void setEmailService(EmailService emailService) {
@@ -380,4 +394,4 @@ public class FiberServer {
         this.fileSizeThreshold = fileSizeThreshold;
         return this;
     }
-} 
+}

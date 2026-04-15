@@ -1,40 +1,25 @@
 package sh.fyz.fiber.handler.parameter;
 
 import java.lang.reflect.Parameter;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Registre central pour tous les handlers de paramètres.
- */
 public class ParameterHandlerRegistry {
-    private static final List<ParameterHandler> handlers = new ArrayList<>();
+    private static final List<ParameterHandler> handlers = new CopyOnWriteArrayList<>();
 
-    /**
-     * Enregistre un nouveau handler de paramètres.
-     *
-     * @param handler Le handler à enregistrer
-     */
     public static void register(ParameterHandler handler) {
         handlers.add(handler);
     }
 
-    /**
-     * Trouve le premier handler capable de gérer le paramètre donné.
-     *
-     * @param parameter Le paramètre à gérer
-     * @return Le handler approprié ou null si aucun handler n'est trouvé
-     */
     public static ParameterHandler findHandler(Parameter parameter) {
-        return handlers.stream()
-                .filter(handler -> handler.canHandle(parameter))
-                .findFirst()
-                .orElse(null);
+        for (ParameterHandler handler : handlers) {
+            if (handler.canHandle(parameter)) {
+                return handler;
+            }
+        }
+        return null;
     }
 
-    /**
-     * Initialise les handlers par défaut.
-     */
     public static void initialize() {
         register(new ServletParameterHandler());
         register(new RequestBodyParameterHandler());

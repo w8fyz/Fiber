@@ -1,34 +1,30 @@
 package sh.fyz.fiber.core.security.interceptors;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.exceptions.RateLimitExceededException;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.Deque;
-import java.util.Map;
 import java.util.concurrent.*;
 
 public class RateLimitInterceptor {
 
-    private static final Map<String, AttemptInfo> fixedAttempts = new ConcurrentHashMap<>();
-    private static final Map<String, SlidingWindowInfo> slidingAttempts = new ConcurrentHashMap<>();
+    private static final int MAX_TRACKED_KEYS = 100_000;
 
-    private static final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "ratelimit-cleanup");
-        t.setDaemon(true);
-        return t;
-    });
+    private static final Cache<String, AttemptInfo> fixedAttempts = Caffeine.newBuilder()
+            .maximumSize(MAX_TRACKED_KEYS)
+            .expireAfterAccess(30, TimeUnit.MINUTES)
+            .build();
 
-    static {
-        cleanupExecutor.scheduleAtFixedRate(() -> {
-            fixedAttempts.entrySet().removeIf(e -> e.getValue().isExpired());
-            slidingAttempts.entrySet().removeIf(e -> e.getValue().isExpired());
-        }, 1, 1, TimeUnit.MINUTES);
-    }
+    private static final Cache<String, SlidingWindowInfo> slidingAttempts = Caffeine.newBuilder()
+            .maximumSize(MAX_TRACKED_KEYS)
+            .expireAfterAccess(30, TimeUnit.MINUTES)
+            .build();
 
-    //  Fixed window 
-
+    // Fixed window — all fields accessed under synchronized(this)
     public static class AttemptInfo {
         private int count;
         private Instant windowStart;
@@ -44,33 +40,25 @@ public class RateLimitInterceptor {
             this.windowStart = Instant.now();
         }
 
-        public void increment() {
+        public synchronized void incrementAndCheck() {
+            resetIfExpired();
             this.count++;
+            if (count > maxAttempts && Instant.now().isBefore(windowStart.plusSeconds(windowSeconds))) {
+                long elapsed = Instant.now().getEpochSecond() - windowStart.getEpochSecond();
+                long retry = Math.max(1, windowSeconds - elapsed);
+                throw new RateLimitExceededException(message, retry);
+            }
         }
 
-        public boolean isExceeded() {
-            return count > maxAttempts && Instant.now().isBefore(windowStart.plusSeconds(windowSeconds));
-        }
-
-        public long retryAfterSeconds() {
-            long elapsed = Instant.now().getEpochSecond() - windowStart.getEpochSecond();
-            return Math.max(1, windowSeconds - elapsed);
-        }
-
-        public void resetIfExpired() {
+        private void resetIfExpired() {
             if (Instant.now().isAfter(windowStart.plusSeconds(windowSeconds))) {
                 count = 1;
                 windowStart = Instant.now();
             }
         }
-
-        public boolean isExpired() {
-            return Instant.now().isAfter(windowStart.plusSeconds(windowSeconds * 2));
-        }
     }
 
-    //  Sliding window 
-
+    // Sliding window — all access synchronized
     public static class SlidingWindowInfo {
         private final Deque<Instant> timestamps = new ConcurrentLinkedDeque<>();
         private final long windowSeconds;
@@ -83,7 +71,7 @@ public class RateLimitInterceptor {
             this.message = rateLimit.message();
         }
 
-        public boolean tryAcquire() {
+        public synchronized boolean tryAcquire() {
             evictExpired();
             if (timestamps.size() >= maxAttempts) {
                 return false;
@@ -92,7 +80,7 @@ public class RateLimitInterceptor {
             return true;
         }
 
-        public long retryAfterSeconds() {
+        public synchronized long retryAfterSeconds() {
             Instant oldest = timestamps.peekFirst();
             if (oldest == null) return 0;
             long elapsed = Instant.now().getEpochSecond() - oldest.getEpochSecond();
@@ -106,12 +94,7 @@ public class RateLimitInterceptor {
             }
         }
 
-        public boolean isExpired() {
-            evictExpired();
-            return timestamps.isEmpty();
-        }
-
-        public void reset() {
+        public synchronized void reset() {
             timestamps.clear();
         }
     }
@@ -123,9 +106,6 @@ public class RateLimitInterceptor {
         return identifier + ":" + bucket;
     }
 
-    /**
-     * @return seconds until the client can retry, or -1 if not rate limited
-     */
     public static long checkRateLimit(String identifier, Method method) {
         RateLimit rateLimit = method.getAnnotation(RateLimit.class);
         if (rateLimit == null) return -1;
@@ -133,22 +113,17 @@ public class RateLimitInterceptor {
         String cacheKey = buildCacheKey(identifier, method, rateLimit);
 
         if (rateLimit.slidingWindow()) {
-            SlidingWindowInfo info = slidingAttempts.computeIfAbsent(cacheKey, k -> new SlidingWindowInfo(rateLimit));
+            SlidingWindowInfo info = slidingAttempts.get(cacheKey, k -> new SlidingWindowInfo(rateLimit));
             if (!info.tryAcquire()) {
                 throw new RateLimitExceededException(rateLimit.message(), info.retryAfterSeconds());
             }
         } else {
-            fixedAttempts.compute(cacheKey, (k, info) -> {
-                if (info == null) {
-                    return new AttemptInfo(rateLimit);
-                }
-                info.resetIfExpired();
-                info.increment();
-                if (info.isExceeded()) {
-                    throw new RateLimitExceededException(rateLimit.message(), info.retryAfterSeconds());
-                }
-                return info;
-            });
+            AttemptInfo existing = fixedAttempts.getIfPresent(cacheKey);
+            if (existing == null) {
+                fixedAttempts.put(cacheKey, new AttemptInfo(rateLimit));
+            } else {
+                existing.incrementAndCheck();
+            }
         }
         return -1;
     }
@@ -159,16 +134,16 @@ public class RateLimitInterceptor {
 
         String cacheKey = buildCacheKey(identifier, method, rateLimit);
         if (rateLimit.slidingWindow()) {
-            SlidingWindowInfo info = slidingAttempts.get(cacheKey);
+            SlidingWindowInfo info = slidingAttempts.getIfPresent(cacheKey);
             if (info != null) info.reset();
         } else {
-            fixedAttempts.remove(cacheKey);
+            fixedAttempts.invalidate(cacheKey);
         }
     }
 
-    /** Visible for testing — clear all tracked state. */
+    /** Visible for testing -- clear all tracked state. */
     public static void clearAll() {
-        fixedAttempts.clear();
-        slidingAttempts.clear();
+        fixedAttempts.invalidateAll();
+        slidingAttempts.invalidateAll();
     }
 }

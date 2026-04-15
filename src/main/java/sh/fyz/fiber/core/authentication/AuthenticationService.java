@@ -87,7 +87,15 @@ public abstract class AuthenticationService<T extends UserAuth> {
         return UserFieldUtil.validatePassword(user, password);
     }
 
+    /**
+     * Override this method to provide an efficient database query for user lookup by identifier.
+     * The default implementation loads all users in memory (not suitable for production).
+     */
     public UserAuth findUserByIdentifer(String identifier) {
+        return findByIdentifier(identifier);
+    }
+
+    protected UserAuth findByIdentifier(String identifier) {
         return UserFieldUtil.findUserByIdentifier(identifier, userRepository.all());
     }
 

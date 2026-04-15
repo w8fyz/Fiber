@@ -92,7 +92,18 @@ public class UserFieldUtil {
         }
     }
 
+    private static int minPasswordLength = 0;
+    private static boolean requireUppercase = false;
+    private static boolean requireDigit = false;
+
+    public static void setPasswordPolicy(int minLength, boolean upperCase, boolean digit) {
+        minPasswordLength = minLength;
+        requireUppercase = upperCase;
+        requireDigit = digit;
+    }
+
     public static void setPassword(UserAuth user, String password) {
+        validatePasswordStrength(password);
         try {
             Field passwordField = passwordFields.get(user.getClass());
             if (passwordField == null) {
@@ -103,6 +114,21 @@ public class UserFieldUtil {
             passwordField.set(user, hashedPassword);
         } catch (IllegalAccessException e) {
             throw new RuntimeException("Failed to set password", e);
+        }
+    }
+
+    public static void validatePasswordStrength(String password) {
+        if (minPasswordLength <= 0 && !requireUppercase && !requireDigit) {
+            return;
+        }
+        if (password == null || password.length() < minPasswordLength) {
+            throw new IllegalArgumentException("Password must be at least " + minPasswordLength + " characters long");
+        }
+        if (requireUppercase && password.equals(password.toLowerCase())) {
+            throw new IllegalArgumentException("Password must contain at least one uppercase letter");
+        }
+        if (requireDigit && !password.matches(".*\\d.*")) {
+            throw new IllegalArgumentException("Password must contain at least one digit");
         }
     }
 

@@ -4,15 +4,38 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ValidationRegistry {
     private static final Map<Class<? extends Annotation>, Validator<?>> validators = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, List<FieldValidationInfo>> fieldCache = new ConcurrentHashMap<>();
+
+    private record FieldValidationInfo(Field field, List<Annotation> validatableAnnotations) {}
 
     public static void register(Validator<?> validator) {
         validators.put(validator.getAnnotationType(), validator);
+    }
+
+    private static List<FieldValidationInfo> getFieldInfo(Class<?> clazz) {
+        return fieldCache.computeIfAbsent(clazz, c -> {
+            List<FieldValidationInfo> infos = new ArrayList<>();
+            for (Field field : c.getDeclaredFields()) {
+                List<Annotation> validatable = new ArrayList<>();
+                for (Annotation annotation : field.getAnnotations()) {
+                    if (validators.containsKey(annotation.annotationType())) {
+                        validatable.add(annotation);
+                    }
+                }
+                if (!validatable.isEmpty()) {
+                    field.setAccessible(true);
+                    infos.add(new FieldValidationInfo(field, Collections.unmodifiableList(validatable)));
+                }
+            }
+            return Collections.unmodifiableList(infos);
+        });
     }
 
     @SuppressWarnings("unchecked")
@@ -22,21 +45,20 @@ public class ValidationRegistry {
         }
 
         List<String> errors = new ArrayList<>();
-        for (Field field : value.getClass().getDeclaredFields()) {
-            for (Annotation annotation : field.getAnnotations()) {
-                Validator<?> validator = validators.get(annotation.annotationType());
-                if (validator != null) {
-                    field.setAccessible(true);
-                    try {
-                        Object fieldValue = field.get(value);
+        for (FieldValidationInfo info : getFieldInfo(value.getClass())) {
+            try {
+                Object fieldValue = info.field().get(value);
+                for (Annotation annotation : info.validatableAnnotations()) {
+                    Validator<?> validator = validators.get(annotation.annotationType());
+                    if (validator != null) {
                         ValidationResult fieldResult = ((Validator<Object>) validator).validate(fieldValue, annotation);
                         if (!fieldResult.isValid()) {
                             errors.addAll(fieldResult.getErrors());
                         }
-                    } catch (IllegalAccessException e) {
-                        errors.add("Failed to access field: " + field.getName());
                     }
                 }
+            } catch (IllegalAccessException e) {
+                errors.add("Failed to access field: " + info.field().getName());
             }
         }
 
@@ -56,4 +78,4 @@ public class ValidationRegistry {
         }
         return ValidationResult.valid();
     }
-} 
+}

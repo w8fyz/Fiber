@@ -33,8 +33,7 @@ public class PermissionProcessor {
         }
 
         if (!hasRole || !hasPermission) {
-            String message = "Access denied, you do not have the required permissions or role to access this resource.";
-            return ResponseEntity.unauthorized(message);
+            return ResponseEntity.forbidden("Access denied, you do not have the required permissions or role to access this resource.");
         }
         return null;
     }

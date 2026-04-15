@@ -43,7 +43,7 @@ src/main/java/sh/fyz/fiber/
 ├── core/
 │   ├── EndpointRegistry.java                   # Route → EndpointHandler mapping
 │   ├── ErrorResponse.java                      # Standardized JSON error responses
-│   ├── JwtUtil.java                            # JWT generation/validation (HS256, JJWT)
+│   ├── JwtUtil.java                            # JWT generation/validation (HS256, JJWT, lazy init)
 │   ├── ResponseEntity.java                     # Typed HTTP response builder
 │   ├── authentication/
 │   │   ├── AuthenticationService.java          # Abstract: login, cookies, token lifecycle
@@ -52,19 +52,20 @@ src/main/java/sh/fyz/fiber/
 │   │   ├── AuthResolver.java                   # Routes request to matching Authenticator
 │   │   ├── AuthScheme.java                     # Enum: BEARER, COOKIE, BASIC
 │   │   ├── Authenticator.java                  # Interface: scheme() + authenticate(request)
-│   │   ├── RoleRegistry.java                   # Register and query Role classes
+│   │   ├── RoleRegistry.java                   # Register and query Role classes (ConcurrentHashMap)
 │   │   ├── SameSitePolicy.java                 # Enum: STRICT, LAX, NONE
 │   │   ├── entities/
 │   │   │   ├── Role.java                       # Abstract role with permissions + hierarchy
 │   │   │   ├── UserAuth.java                   # Interface: getId(), getRole(), session helpers
-│   │   │   └── UserFieldUtil.java              # Reflection on @IdentifierField/@PasswordField
+│   │   │   └── UserFieldUtil.java              # Reflection on @IdentifierField/@PasswordField + password policy
 │   │   ├── impl/
 │   │   │   ├── BasicAuthenticator.java         # OAuth2 client_id/client_secret via Basic
 │   │   │   ├── BearerAuthenticator.java        # Authorization: Bearer <jwt>
-│   │   │   └── CookieAuthenticator.java        # access_token cookie
+│   │   │   ├── CookieAuthenticator.java        # access_token cookie
+│   │   │   └── SessionValidator.java           # Shared session validation (extracted from Cookie/Bearer)
 │   │   └── oauth2/
 │   │       ├── OAuth2Provider.java             # Interface: getProviderId, getAuthorizationUrl, processCallback, mapUserData
-│   │       ├── AbstractOAuth2Provider.java     # Base impl: code exchange, userInfo fetch, URL building
+│   │       ├── AbstractOAuth2Provider.java     # Base impl: code exchange, userInfo fetch, URL building, SSRF protection
 │   │       ├── OAuth2AuthenticationService.java # Abstract: state store, provider registry, handleCallback
 │   │       ├── OAuth2ApplicationInfo.java      # Record: clientId + clientSecret (for server-side OAuth2)
 │   │       ├── OAuth2ApplicationAuthenticator.java # Interface for Basic auth → OAuth2ApplicationInfo
@@ -91,53 +92,54 @@ src/main/java/sh/fyz/fiber/
 │   │   ├── annotations/
 │   │   │   ├── AuditLog.java                   # @AuditLog(action, logParameters, mask...)
 │   │   │   └── RateLimit.java                  # @RateLimit(attempts, timeout, unit)
-│   │   ├── cors/CorsService.java               # Fluent CORS configuration
+│   │   ├── cors/CorsService.java               # Fluent CORS configuration (safe wildcard matching)
 │   │   ├── csrf/CsrfController.java            # GET /internal/csrf/token
 │   │   ├── filters/SecurityHeadersFilter.java  # Auto security headers
-│   │   ├── interceptors/RateLimitInterceptor.java
-│   │   ├── logging/AuditLogProcessor.java, AuditContext.java
+│   │   ├── interceptors/RateLimitInterceptor.java # Caffeine-bounded, thread-safe
+│   │   ├── logging/AuditLogProcessor.java, AuditContext.java # Async audit logging on virtual threads
 │   │   └── processors/
-│   │       ├── PermissionProcessor.java
+│   │       ├── PermissionProcessor.java        # Returns 403 Forbidden (not 401)
 │   │       └── RateLimitProcessor.java
 │   ├── session/
 │   │   ├── FiberSession.java                   # JPA entity: id, userId, ip, ua, timestamps
 │   │   ├── SessionContext.java                 # ThreadLocal<FiberSession> per-request
 │   │   └── SessionService.java                 # CRUD, invalidation, cleanup
 │   └── upload/
-│       ├── FileUploadManager.java              # Singleton, chunked upload tracking
+│       ├── FileUploadManager.java              # Singleton, chunked upload tracking, auto-cleanup
 │       └── UploadedFile.java                   # File wrapper: moveTo, cleanup, getInputStream
 ├── handler/
 │   ├── EndpointHandler.java                    # Per-route handler: security → params → invoke
 │   ├── FiberErrorHandler.java                  # Jetty error handler (JSON)
 │   ├── ParameterResolver.java                  # Resolves method arguments from request
-│   ├── ResponseWriter.java                     # Writes result to HttpServletResponse
-│   ├── RouterServlet.java                      # Single servlet dispatching all requests
+│   ├── ResponseWriter.java                     # Writes result to HttpServletResponse (writeValueAsBytes)
+│   ├── RouterServlet.java                      # O(1) static route lookup, linear scan for dynamic routes
 │   ├── SecurityPipeline.java                   # CSRF → auth → permissions chain
 │   ├── SecurityResult.java                     # Pipeline output (user, app, proceed)
 │   └── parameter/
 │       ├── ParameterHandler.java               # Interface: canHandle + handle
-│       ├── ParameterHandlerRegistry.java       # Handler discovery and registration
+│       ├── ParameterHandlerRegistry.java       # CopyOnWriteArrayList, handler discovery
 │       ├── AuthenticatedUserParameterHandler.java
 │       ├── SessionParameterHandler.java        # @CurrentSession / FiberSession
 │       ├── FileUploadParameterHandler.java
 │       ├── OAuth2ApplicationInfoParameterHandler.java
-│       ├── PathVariableParameterHandler.java
-│       ├── QueryParameterHandler.java
-│       ├── RequestBodyParameterHandler.java
+│       ├── PathVariableParameterHandler.java   # Uses shared TypeConverter
+│       ├── QueryParameterHandler.java          # Uses shared TypeConverter
+│       ├── RequestBodyParameterHandler.java    # Caches raw body for audit logging
 │       └── ServletParameterHandler.java        # HttpServletRequest/Response injection
 ├── middleware/
 │   ├── Middleware.java                         # Interface: priority() + handle()
-│   └── impl/CsrfMiddleware.java
+│   └── impl/CsrfMiddleware.java               # HMAC-signed tokens, stable per session
 ├── util/
 │   ├── FiberObjectMapper.java                  # Pre-configured Jackson ObjectMapper
-│   ├── HttpUtil.java                           # Proxy-aware IP resolution
+│   ├── HttpUtil.java                           # Trusted-proxy-aware IP resolution
 │   ├── JsonUtil.java                           # toJson / fromJson helpers
-│   └── RandomUtil.java
+│   ├── RandomUtil.java
+│   └── TypeConverter.java                      # Shared String→primitive conversion
 └── validation/
     ├── Email.java, Min.java, NotBlank.java, NotNull.java  # Annotations
     ├── ValidationInitializer.java              # Registers built-in validators
-    ├── ValidationProcessor.java                # Field-level validation (standalone)
-    ├── ValidationRegistry.java                 # Extensible validator registry
+    ├── ValidationProcessor.java                # Field-level validation (standalone, legacy)
+    ├── ValidationRegistry.java                 # Extensible validator registry with field metadata cache
     └── validators/                             # EmailValidator, MinValidator, etc.
 ```
 
@@ -158,7 +160,8 @@ Key configuration methods (call before `start()`):
 - `enableCSRFProtection()` — enables CSRF middleware + token endpoint
 - `setAuditLogService(AuditLogService)` — audit log backend
 - `setEmailService(EmailService)` — SMTP email
-- `setServerHeader(String)` — custom Server response header
+- `setServerHeader(String)` — custom Server response header (default: "Fiber")
+- `setTrustedProxies(List<String>)` — IP addresses of trusted reverse proxies (required for X-Forwarded-For)
 - `getRoleRegistry().registerRoleClasses(...)` — role/permission system
 - `addMiddleware(Middleware)` — global middleware
 - `registerController(Object)` or `registerController(Class<?>)` — register controllers
@@ -170,13 +173,29 @@ Key configuration methods (call before `start()`):
 
 Singleton access after construction: `FiberServer.get()`.
 
+**IMPORTANT**: `start()` will throw `IllegalStateException` in production mode (non-dev) if no JWT secret is configured. Call `enableDevelopmentMode()` before `start()` for local development, or set `FIBER_SECRET_KEY` env variable / `JWT_SECRET_KEY` in `fiberconfig.json`.
+
+### Virtual Threads (Java 21)
+
+Fiber automatically configures Jetty with a virtual thread executor. This removes the 200-thread ceiling for I/O-bound workloads and significantly improves throughput under high concurrency. No configuration needed — it's enabled by default.
+
+### Trusted Proxies
+
+By default, Fiber uses `request.getRemoteAddr()` as the client IP. Proxy headers (X-Forwarded-For, X-Real-IP) are **ignored** unless you explicitly configure trusted proxies:
+
+```java
+server.setTrustedProxies(List.of("10.0.0.1", "10.0.0.2")); // your load balancer IPs
+```
+
+This prevents IP spoofing via forged headers, which would bypass rate limiting and JWT IP binding.
+
 ### Configuration (`FiberConfig`)
 
 Loaded from `fiberconfig.json` (or env variables prefixed `FIBER_`). Fields:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `JWT_SECRET_KEY` | (auto-generated) | HS256 signing key. If missing or < 32 chars, a random 48-byte key is generated at startup with a warning. Set via `FIBER_SECRET_KEY` env var or `fiberconfig.json` |
+| `JWT_SECRET_KEY` | (auto-generated in dev) | HS256 signing key. **Required** in production (min 32 chars). Set via `FIBER_SECRET_KEY` env var or `fiberconfig.json`. Fails at `start()` if missing in non-dev mode |
 | `JWT_TOKEN_VALIDITY` | `3600000` (1h) | Access token lifetime in ms |
 | `JWT_REFRESH_TOKEN_VALIDITY` | `604800000` (7d) | Refresh token lifetime in ms |
 
@@ -185,18 +204,18 @@ Loaded from `fiberconfig.json` (or env variables prefixed `FIBER_`). Fields:
 For each incoming request, `RouterServlet.service()` executes:
 
 1. **OPTIONS** → `CorsService.handlePreflightRequest()` → return
-2. **CORS** → `CorsService.configureCorsHeaders()` → 403 if origin blocked
-3. **Route matching** → iterate `EndpointRegistry`, match by path + HTTP method, prefer fewest path variables
+2. **Route matching** → O(1) HashMap lookup for static routes, linear scan for dynamic routes (path variables/wildcards). Prefer fewest path variables on tie.
+3. **CORS** → `CorsService.configureCorsHeaders()` → 403 if origin blocked (skipped if endpoint has `@NoCors`)
 4. **Rate limiting** → `RateLimitProcessor.process()` → 429 if exceeded
 5. **Security pipeline** (`EndpointHandler` → `SecurityPipeline.execute()`):
    a. **CSRF** → `CsrfMiddleware.handle()` (skipped if `@NoCSRF`)
    b. **Basic auth** → only for OAuth2 endpoints needing `OAuth2ApplicationInfo`
    c. **User auth** → `AuthResolver.resolveUser()` tries each registered `Authenticator` for the accepted `AuthScheme`s
-   d. **Permissions** → `PermissionProcessor.process()` checks `@RequireRole` / `@Permission` (method-level then class-level)
+   d. **Permissions** → `PermissionProcessor.process()` checks `@RequireRole` / `@Permission` (method-level then class-level) → returns **403 Forbidden** (not 401)
 6. **Middleware** → all registered `Middleware` in priority order
 7. **Parameter resolution** → `ParameterResolver` iterates `ParameterHandlerRegistry` handlers
 8. **Method invocation** → controller method called via reflection
-9. **Audit log** → if `@AuditLog` present, `AuditLogProcessor.logAuditEvent()` + `AuditContext` collection
+9. **Audit log** → if `@AuditLog` present, `AuditLogProcessor.logAuditEvent()` runs **asynchronously on a virtual thread** + `AuditContext` collection
 10. **Rate limit success** → if status 200, `RateLimitProcessor.onSuccess()` resets counter
 11. **Cleanup** → `AuditContext.clear()`, `SessionContext.clear()` in `finally`
 
@@ -233,7 +252,7 @@ Controllers can be registered by class (`server.registerController(UserControlle
 
 ### Path Matching
 
-- Static: `/users/me`
+- Static: `/users/me` — O(1) HashMap lookup
 - Parameterized: `/users/{id}` — `{name}` segments become named regex groups
 - Wildcard: `/docs/css/*`
 - Paths are normalized via `EndpointHandler.normalizePath()`: `//` → `/`, trailing slashes removed, leading `/` ensured
@@ -244,7 +263,7 @@ Controllers can be registered by class (`server.registerController(UserControlle
 Parameters are resolved in order by the first matching `ParameterHandler`:
 
 1. `HttpServletRequest` / `HttpServletResponse` — injected directly
-2. `@RequestBody` — JSON deserialization + validation
+2. `@RequestBody` — JSON deserialization + validation (raw body cached for audit logging)
 3. `@Param("name")` — query string, with type conversion and optional `required = false`
 4. `@PathVariable("name")` — from URL path segment
 5. `@AuthenticatedUser` — resolved by SecurityPipeline (not via handler registry)
@@ -254,7 +273,7 @@ Parameters are resolved in order by the first matching `ParameterHandler`:
 
 ### Type Conversion
 
-`@Param` and `@PathVariable` auto-convert to: `String`, `int`/`Integer`, `long`/`Long`, `double`/`Double`, `boolean`/`Boolean`.
+`@Param` and `@PathVariable` auto-convert to: `String`, `int`/`Integer`, `long`/`Long`, `double`/`Double`, `boolean`/`Boolean`. Shared via `TypeConverter` utility class.
 
 ## ResponseEntity
 
@@ -264,6 +283,7 @@ ResponseEntity.created(body)                     // 201
 ResponseEntity.noContent()                       // 204
 ResponseEntity.badRequest(body)                  // 400
 ResponseEntity.unauthorized(body)                // 401
+ResponseEntity.forbidden(body)                   // 403
 ResponseEntity.notFound()                        // 404
 ResponseEntity.gone(body)                        // 410
 ResponseEntity.tooManyRequest(body)              // 429
@@ -281,9 +301,8 @@ Body handling:
 
 **Serialization behavior**:
 - `DTOConvertible` objects are automatically converted via `asDTO()` before Jackson serialization — `@IgnoreDTO` fields and null fields are excluded. This applies recursively inside Maps, Lists, and arrays.
-- The response is serialized to `byte[]` first, then written to the output stream with `Content-Length` set. This prevents truncated JSON from streaming errors (e.g., Hibernate lazy-loading exceptions mid-write).
+- The response is serialized to `byte[]` via `ObjectMapper.writeValueAsBytes()`, then written to the output stream with `Content-Length` set.
 - `ResponseEntity.write()` checks `resp.isCommitted()` before writing. Methods return `this` for fluent chaining: `.header(name, value)`, `.contentType(type)`.
-- `ResponseEntity.prepareForSerialization(Object)` is public and can be used directly if needed.
 
 ## Authentication
 
@@ -296,14 +315,19 @@ public class MyAuthService extends AuthenticationService<User> {
     public MyAuthService(GenericRepository<User> repo) {
         super(repo, "/auth");  // refresh token cookie path
     }
-    // Or with custom cookie config:
-    // super(repo, "/auth", new AuthCookieConfig().setSameSite(SameSitePolicy.LAX));
+
+    // Override for efficient database lookup instead of loading all users
+    @Override
+    public UserAuth findUserByIdentifer(String identifier) {
+        return repo.query().where("email", identifier).findFirst();
+    }
 }
 ```
 
 Key methods inherited:
 - `getUserById(Object id)` — load from repository (Caffeine-cached, 30s TTL)
-- `findUserByIdentifer(String identifier)` — looks up `@IdentifierField` fields
+- `findUserByIdentifer(String identifier)` — override this for efficient DB lookup (default loads all users)
+- `findByIdentifier(String identifier)` — protected fallback that loads all users (avoid in production)
 - `validateCredentials(UserAuth user, String password)` — BCrypt compare
 - `doesIdentifiersAlreadyExists(UserAuth user)` — uniqueness check
 - `generateToken(UserAuth user, HttpServletRequest req)` — JWT access token
@@ -312,6 +336,8 @@ Key methods inherited:
 - `clearAuthCookies(req, resp)` — clears cookies, invalidates current session
 - `evictUser(Object id)` — invalidate a single user from cache (call after save/update/delete)
 - `evictAllUsers()` — invalidate the entire user cache
+
+**IMPORTANT**: Override `findUserByIdentifer()` in your `AuthenticationService` subclass with a targeted database query. The default implementation loads ALL users into memory on every login attempt.
 
 #### User Cache
 
@@ -323,8 +349,6 @@ Key methods inherited:
 userRepository.save(user);
 authService.evictUser(user.getId()); // keep cache consistent
 ```
-
-The cache can be customized by overriding `buildUserCache()` in your `AuthenticationService` subclass. Return `null` to disable caching entirely.
 
 ### UserAuth Interface
 
@@ -349,6 +373,8 @@ Register on `FiberServer.get().getAuthResolver()`:
 - `BearerAuthenticator` — reads `Authorization: Bearer <token>` header
 - `BasicAuthenticator` — for OAuth2 client credentials (auto-detected)
 
+All authenticators use shared `SessionValidator` for session validation.
+
 ### @AuthType
 
 Control which auth schemes an endpoint accepts:
@@ -363,6 +389,16 @@ Default (no `@AuthType`):
 - If `@AuthenticatedUser` is present → `COOKIE` only
 - If `@RequireRole` or `@Permission` is present (on method or class) → `COOKIE` + `BEARER` (authentication is implicitly required)
 
+### Password Policy
+
+Configure password strength requirements at startup:
+
+```java
+UserFieldUtil.setPasswordPolicy(12, true, true); // min 12 chars, require uppercase, require digit
+```
+
+Default: minimum 8 characters, no uppercase/digit requirement. Validation runs automatically when `setPassword()` is called.
+
 ### OAuth2 — Social Login (Provider)
 
 Allows users to authenticate via external providers (Discord, Google, etc.).
@@ -374,6 +410,8 @@ OAuth2AuthenticationService<User> oauthService = new MyOAuth2Service(authService
 oauthService.registerProvider(new DiscordOAuth2Provider<>("clientId", "secret"));
 server.setOAuthService(oauthService);
 ```
+
+**Security**: `AbstractOAuth2Provider` validates that token and userInfo endpoints use HTTPS and do not target private/loopback addresses (SSRF protection). HTTP requests have a 10-second timeout.
 
 **Implement `OAuth2AuthenticationService`** (abstract):
 
@@ -396,30 +434,9 @@ public class MyOAuth2Service extends OAuth2AuthenticationService<User> {
 }
 ```
 
-**Create a custom provider** by extending `AbstractOAuth2Provider`:
-
-```java
-public class MyDiscordProvider extends DiscordOAuth2Provider<User> {
-    public MyDiscordProvider(String clientId, String secret) {
-        super(clientId, secret);
-    }
-
-    @Override
-    public void mapUserData(Map<String, Object> userInfo, User user) {
-        user.setDiscordId((String) userInfo.get("id"));
-        user.setUsername((String) userInfo.get("username"));
-        user.setEmail((String) userInfo.get("email"));
-    }
-}
-```
-
-**Flow**: your controller calls `oauthService.getAuthorizationUrl(providerId, redirectUri)` → user redirected → callback calls `oauthService.handleCallback(code, state, redirectUri, req, resp)` → cookies set automatically if `findOrCreateUser` returns a user without a state.
-
-Built-in provider: `DiscordOAuth2Provider`. For others, extend `AbstractOAuth2Provider` with the provider's authorization/token/userInfo endpoints.
-
 ### OAuth2 — Client Credentials (Server)
 
-Fiber can act as an OAuth2 authorization server, allowing third-party apps to access your API on behalf of users.
+Fiber can act as an OAuth2 authorization server. The `/oauth/client/authorize` endpoint now **requires authentication** via `@AuthenticatedUser`.
 
 **Setup:**
 
@@ -428,20 +445,9 @@ GenericRepository<OAuth2Client> clientRepo = new GenericRepository<>(OAuth2Clien
 server.setOauthClientService(new OAuth2ClientService(clientRepo));
 ```
 
-This auto-registers `OAuth2ClientController` at `/oauth/client/` with two endpoints:
-- `GET /oauth/client/authorize?client_id=...&redirect_uri=...&response_type=code&state=...` — authorization endpoint (redirects to login if unauthenticated, then redirects back with `code`)
+Endpoints:
+- `GET /oauth/client/authorize?client_id=...&redirect_uri=...&response_type=code&state=...` — authorization (requires authenticated user)
 - `POST /oauth/client/token?code=...` — token exchange (requires Basic auth with client credentials)
-
-**Client registration** (server-side):
-
-```java
-OAuth2Client client = server.getOauthClientService().registerClient("My App", "https://myapp.com/callback");
-// client.getClientId(), client.getClientSecret()
-```
-
-**Token exchange** uses `OAuth2ApplicationInfo` which is resolved via `BasicAuthenticator` from the `Authorization: Basic <base64(clientId:clientSecret)>` header.
-
-Authorization codes are single-use, expire after 10 minutes, and are stored in-memory with scheduled cleanup.
 
 ### Roles
 
@@ -459,19 +465,18 @@ public class AdminRole extends Role {
     public AdminRole() { super("admin"); }
     @Override public void initializePermissions() {
         addPermission("users.manage");
-        addPermission("settings.edit");
     }
     @Override public void initializeParentRoles() {
-        addParentRole(new UserRole()); // inherits all "user" permissions — must pass Role instance, not String
+        addParentRole(new UserRole()); // inherits all "user" permissions
     }
 }
 ```
 
-**IMPORTANT**: `addParentRole()` takes a `Role` instance, not a String. `initializeParentRoles()` must be `public` (not protected).
+**IMPORTANT**: `addParentRole()` takes a `Role` instance, not a String. `initializeParentRoles()` must be `public`.
 
 Registration: `server.getRoleRegistry().registerRoleClasses(UserRole.class, AdminRole.class)`.
 
-Usage: `@RequireRole("admin")` on method or class level. `@Permission({"users.manage"})` for fine-grained control. `PermissionProcessor` checks method-level first, then class-level annotations.
+Usage: `@RequireRole("admin")` on method or class level. `@Permission({"users.manage"})` for fine-grained control. `PermissionProcessor` checks method-level first, then class-level annotations. Returns **403 Forbidden** when the user lacks required permissions.
 
 ## Sessions
 
@@ -480,7 +485,6 @@ Optional server-side session tracking. Without it, auth is pure stateless JWT.
 ### Setup
 
 ```java
-// FiberSession is a JPA entity — Architect handles the table
 GenericRepository<FiberSession> sessionRepo = new GenericRepository<>(FiberSession.class);
 server.setSessionService(new SessionService(sessionRepo));
 // Custom TTL: new SessionService(sessionRepo, 30 * 24 * 3600 * 1000L)
@@ -489,26 +493,9 @@ server.setSessionService(new SessionService(sessionRepo));
 ### How It Works
 
 1. `setAuthCookies()` creates a `FiberSession` in DB (+ puts it in cache) and embeds `sessionId` in the JWT claims.
-2. On each request, `CookieAuthenticator`/`BearerAuthenticator` extracts `sessionId`, loads the session (from Caffeine cache or DB), checks `active` + `expiresAt`.
+2. On each request, `CookieAuthenticator`/`BearerAuthenticator` uses shared `SessionValidator` to extract `sessionId`, load the session (from Caffeine cache or DB), and check `active` + `expiresAt`.
 3. If invalid → 401. If valid → `SessionContext.set(session)`.
 4. `SessionContext.clear()` is called in `RouterServlet.finally` to prevent thread-local leaks.
-
-### Session Cache
-
-`getSession()` is backed by a Caffeine cache (30s TTL, 50k max entries). The cache is automatically invalidated on `invalidate()`, `invalidateAllForUser()`, `invalidateOtherSessions()`, and populated on `createSession()` (write-through). No manual eviction needed — all `SessionService` methods handle cache consistency internally.
-
-### FiberSession Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `String` | UUID primary key |
-| `userId` | `String` | Owner user ID |
-| `ipAddress` | `String` | Client IP at creation |
-| `userAgent` | `String` | User-Agent at creation |
-| `createdAt` | `long` | Timestamp |
-| `lastAccessedAt` | `long` | Updated on access |
-| `expiresAt` | `long` | Expiration timestamp |
-| `active` | `boolean` | Set to false on invalidation |
 
 ### SessionService API
 
@@ -545,7 +532,7 @@ public ResponseEntity<?> info(@CurrentSession FiberSession session) {
 | `@Min(value)` | Field, Parameter | Number must be >= value |
 | `@Email` | Field, Parameter | Must match email regex |
 
-Validation runs automatically on `@RequestBody` deserialization and `@Param`/`@PathVariable` parameters. Failures return 400 with error messages.
+Validation runs automatically on `@RequestBody` deserialization and `@Param`/`@PathVariable` parameters. Failures return 400 with error messages. Field metadata is cached per class for performance.
 
 ### Custom Validators
 
@@ -567,27 +554,109 @@ ValidationRegistry.register(new MyValidator());
 ```java
 server.setCorsService(new CorsService()
     .addAllowedOrigin("https://myapp.com")
-    .addAllowedOrigin("https://*.myapp.com")   // wildcard patterns
+    .addAllowedOrigin("https://*.myapp.com")   // wildcard patterns (safe matching, no regex)
     .setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"))
     .setAllowedHeaders(List.of("Content-Type", "Authorization", "X-CSRF-TOKEN"))
     .setAllowCredentials(true)
     .setMaxAge(3600));
 ```
 
-Skip CORS for specific endpoints: `@NoCors`.
+Skip CORS for specific endpoints: `@NoCors` — this annotation is now properly enforced at runtime.
+
+**Default CORS**: In dev mode, `localhost:3000` is included. In production, only `localhost:{port}` is allowed by default. Always configure explicit origins for production.
 
 ### CSRF
 
 `server.enableCSRFProtection()` activates:
-- XSRF-TOKEN cookie (auto-regenerated)
-- X-CSRF-TOKEN header validation on unsafe methods
-- `GET /internal/csrf/token` endpoint
+- XSRF-TOKEN cookie with HMAC-signed tokens (bound to server secret)
+- X-CSRF-TOKEN header validation on unsafe methods (POST, PUT, DELETE, PATCH)
+- Token is stable during GET requests, regenerated only after successful state-changing requests
+- `GET /internal/csrf/token` endpoint to generate initial token
 
 Skip for specific endpoints: `@NoCSRF`.
 
+#### CSRF Frontend Implementation
+
+To properly integrate CSRF protection in your frontend:
+
+**Vanilla JavaScript / Fetch API:**
+
+```javascript
+// 1. On page load or app init, fetch a CSRF token
+async function initCsrf() {
+  const res = await fetch('/internal/csrf/token', { credentials: 'include' });
+  // The XSRF-TOKEN cookie is now set automatically
+}
+
+// 2. For every state-changing request, read the cookie and send it as a header
+function getCsrfToken() {
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+async function postData(url, data) {
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': getCsrfToken(),
+    },
+    body: JSON.stringify(data),
+  });
+  // After a successful POST, the server returns a new XSRF-TOKEN cookie
+  // automatically — no need to re-fetch
+  return response.json();
+}
+```
+
+**Axios (global interceptor):**
+
+```javascript
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'https://api.example.com',
+  withCredentials: true,
+});
+
+// Automatically attach CSRF token to every request
+api.interceptors.request.use((config) => {
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  if (match) {
+    config.headers['X-CSRF-TOKEN'] = decodeURIComponent(match[1]);
+  }
+  return config;
+});
+
+// On app startup
+await api.get('/internal/csrf/token');
+
+// Then use normally
+await api.post('/api/users', { name: 'John' });
+```
+
+**React (custom hook):**
+
+```javascript
+import { useEffect } from 'react';
+
+function useCsrf() {
+  useEffect(() => {
+    fetch('/internal/csrf/token', { credentials: 'include' });
+  }, []);
+}
+
+// In your App component
+function App() {
+  useCsrf();
+  return <Router>...</Router>;
+}
+```
+
 ### Rate Limiting
 
-Annotation-based rate limiting with two algorithms (fixed window, sliding window), keyed by IP or by authenticated user.
+Annotation-based rate limiting with two algorithms (fixed window, sliding window), keyed by IP or by authenticated user. Rate limit state is stored in **Caffeine bounded caches** (max 100k entries) to prevent memory exhaustion under DDoS.
 
 ```java
 // Basic — fixed window, IP-based
@@ -608,67 +677,25 @@ Annotation-based rate limiting with two algorithms (fixed window, sliding window
 public class HeavyController { ... }
 ```
 
-Annotation attributes:
-- `attempts` (int, default 5) — max requests per window
-- `timeout` (int, default 15) — window duration
-- `unit` (TimeUnit, default MINUTES) — time unit
-- `message` (String) — custom 429 error message
-- `slidingWindow` (boolean, default false) — use sliding window algorithm
-- `perUser` (boolean, default false) — key by userId instead of IP
-- `key` (String) — group endpoints under the same rate-limit bucket
-
 Returns 429 with `Retry-After` header and JSON body `{"status":429, "message":"...", "retryAfter": <seconds>}`.
 
-Proxy-aware (X-Forwarded-For, X-Real-IP). Resets on 200 response. `RateLimitInterceptor.clearAll()` for testing.
+Rate limit identifiers are consistent between `process()` and `onSuccess()` — both use the same `resolveIdentifier()` logic. `RateLimitInterceptor.clearAll()` for testing.
 
 ### Audit Logging
 
-Track security-relevant actions with `@AuditLog`. Logs go to SLF4J and optionally to a custom `AuditLogService`.
+Track security-relevant actions with `@AuditLog`. Logs go to SLF4J and optionally to a custom `AuditLogService`. **Audit processing runs asynchronously on virtual threads** to avoid adding latency to request handling.
 
 ```java
 @AuditLog(action = "USER_LOGIN", logParameters = true, logResult = true, maskSensitiveData = true)
 ```
 
-Annotation attributes:
-- `action` (String, required) — action identifier in the log
-- `logParameters` (boolean, default true) — include method parameters
-- `logResult` (boolean, default true) — include response body
-- `maskSensitiveData` (boolean, default true) — mask `@PasswordField` fields and keys matching password/secret/token
+Sensitive data masking is **recursive** — nested objects and maps containing keys matching `password`, `secret`, or `token` are masked at all levels. Parameter objects are **cloned via JSON serialization** before masking, so the original request data is never mutated.
 
-#### AuditContext — Custom Data
-
-Use `AuditContext` to attach custom key-value data from inside any `@AuditLog` endpoint:
-
-```java
-@AuditLog(action = "PAYMENT")
-@RequestMapping(value = "/pay", method = RequestMapping.Method.POST)
-public ResponseEntity<?> pay(@RequestBody PaymentReq req) {
-    Payment result = service.process(req);
-    AuditContext.put("paymentId", result.getId());
-    AuditContext.put("amount", result.getAmount());
-    return ResponseEntity.ok(result);
-}
-```
-
-`AuditContext` is thread-local, automatically cleared after each request. Available via `AuditContext.put(key, value)`, `AuditContext.get(key)`, `AuditContext.getAll()`.
-
-#### Custom AuditLogService
-
-```java
-public class MyLogService extends AuditLogService {
-    @Override
-    public void onAuditLog(AuditLog log) {
-        // log.getAction(), log.getIp(), log.getStatus(), log.getCustomData(), etc.
-        db.save(log);
-    }
-}
-server.setAuditLogService(new MyLogService());
-```
-
-`AuditLog` DTO fields: `timestamp`, `ip`, `userAgent`, `method`, `uri`, `action`, `status`, `queryParams`, `pathVariables`, `requestBody`, `parameters`, `response`, `customData` (Map from AuditContext), `rawLog` (full JSON string).
+The raw request body is automatically cached by `RequestBodyParameterHandler` and available for audit logging even after the input stream is consumed.
 
 ### Security Headers (automatic)
 
+- `Server: Fiber` (customizable via `setServerHeader()`)
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
@@ -691,24 +718,7 @@ public ResponseEntity<?> upload(
 }
 ```
 
-### UploadedFile API
-
-| Method | Throws | Description |
-|--------|--------|-------------|
-| `moveTo(Path destination)` | `IOException` | Move temp file to final location. Throws `IllegalStateException` if chunked upload is incomplete |
-| `cleanup()` | `IOException` | Delete the temp file |
-| `getInputStream()` | `IOException` | Read the file content |
-| `getOriginalFilename()` | — | Sanitized filename |
-| `getContentType()` | — | MIME type |
-| `getSize()` | — | File size in bytes |
-| `isComplete()` | — | True if all chunks received |
-| `getUploadId()` | — | UUID for chunked uploads |
-
-**Important**: `moveTo()` and `cleanup()` throw checked `IOException` — always wrap in try-catch.
-
-Chunked uploads: client sends `uploadId`, `chunkIndex`, `totalChunks` as query params. Chunks are assembled server-side via `addChunk(Part, int)` (must be in order). Incomplete uploads are auto-cleaned after 24h.
-
-Filenames are sanitized: path separators (`/`, `\`), `..` sequences removed, only `[a-zA-Z0-9._-]` kept.
+Incomplete uploads are auto-cleaned after 24h. **Completed uploads are also cleaned after 1h** to prevent memory leaks.
 
 ## Email
 
@@ -728,8 +738,6 @@ email.setTemplateVariables(Map.of("name", "John"));
 FiberServer.get().getEmailService().sendEmail(email); // returns CompletableFuture<Void>
 ```
 
-Templates support `{variable}` substitution and `@import="path/to/partial.html"@` includes.
-
 ## Middleware
 
 ```java
@@ -746,20 +754,11 @@ public class TimingMiddleware implements Middleware {
 server.addMiddleware(new TimingMiddleware());
 ```
 
-Middleware executes after authentication/permissions but before parameter resolution. Register middleware before controllers.
+Middleware list uses `CopyOnWriteArrayList` for thread safety. Middleware executes after authentication/permissions but before parameter resolution.
 
 ## Challenges
 
 A challenge is a time-limited verification flow (email confirmation, 2FA code, CAPTCHA, etc.). The system stores challenges in-memory and exposes a single verification endpoint.
-
-### Architecture
-
-- `Challenge` — interface defining the contract (id, userId, expiry, status, validateResponse, complete, fail, metadata, callback)
-- `AbstractChallenge` — base class implementing common logic (UUID generation, expiry check, status management, metadata map). Extends `DTOConvertible` for serialization
-- `ChallengeCallback` — interface with `onSuccess` and `onFailure` returning `ResponseEntity<Object>`
-- `ChallengeStatus` — enum: `PENDING`, `COMPLETED`, `FAILED`, `EXPIRED`, `CANCELLED`
-- `ChallengeRegistry` — in-memory `ConcurrentHashMap<String, Challenge>` storage + validation logic
-- `ChallengeController` — internal endpoint `POST /internal/challenge/verify/{challengeID}`
 
 ### Creating a Challenge
 
@@ -785,87 +784,26 @@ public class EmailVerificationChallenge extends AbstractChallenge {
 }
 ```
 
-`AbstractChallenge` provides:
-- Auto-generated UUID `id`
-- `createdAt` = `Instant.now()`
-- `status` starts as `PENDING`
-- `complete()` → sets status to `COMPLETED`, calls `callback.onSuccess()`
-- `fail()` → sets status to `FAILED`, calls `callback.onFailure(this, "INVALID_RESPONSE", ...)`
-- `setStatus(EXPIRED, ...)` → calls `callback.onFailure(this, "EXPIRED", ...)`
-- `addMetadata(key, value)` — attach arbitrary data to the challenge
-- `asDTO()` — serializes public fields (metadata and callback are `@IgnoreDTO`)
-
-### Registering a Challenge
+### Registering and Verifying
 
 ```java
-String verificationCode = "123456";
-EmailVerificationChallenge challenge = new EmailVerificationChallenge(user.getId(), verificationCode);
-
 Challenge registered = server.registerChallenge(challenge, new ChallengeCallback() {
     @Override
     public ResponseEntity<Object> onSuccess(Challenge c, HttpServletRequest req, HttpServletResponse resp) {
-        userService.markEmailVerified(c.getUserId());
         return ResponseEntity.ok(Map.of("verified", true));
     }
-
     @Override
     public ResponseEntity<Object> onFailure(Challenge c, String reason, HttpServletRequest req, HttpServletResponse resp) {
         return ResponseEntity.badRequest(Map.of("error", reason));
     }
 });
-
-// Send the challenge ID to the user (e.g., in an email link or API response)
-String challengeId = registered.getId();
 ```
 
-`registerChallenge`:
-1. On first call, auto-registers `ChallengeController` at `/internal/challenge/`
-2. Attaches the callback to the challenge
-3. Stores the challenge in `ChallengeRegistry` (keyed by UUID)
-4. Returns the challenge (with its generated `id`)
-
-### Verification Flow
-
-Client sends: `POST /internal/challenge/verify/{challengeId}`
-
-```json
-{"code": "123456"}
-```
-
-The `ChallengeController` (annotated with `@AuditLog(action = "CHALLENGE_VERIFICATION")`) does:
-1. Looks up the challenge by ID → 404 if not found
-2. Calls `challengeRegistry.validateChallenge()`:
-   - If expired → sets status `EXPIRED`, calls `onFailure("EXPIRED")`, returns 410
-   - If `validateResponse()` returns true → calls `complete()` → `onSuccess()` → returns success response
-   - If `validateResponse()` returns false → calls `fail()` → `onFailure("INVALID_RESPONSE")` → returns failure response
-3. If the callback returns null → returns 410 "Challenge expired"
-
-### Lifecycle
-
-```
-PENDING → validateResponse(true)  → COMPLETED  (onSuccess called)
-PENDING → validateResponse(false) → FAILED     (onFailure called with "INVALID_RESPONSE")
-PENDING → isExpired()             → EXPIRED    (onFailure called with "EXPIRED")
-PENDING → manual                  → CANCELLED
-```
-
-### Cleanup
-
-Challenges are NOT auto-removed after completion/failure. Call `ChallengeRegistry` methods manually:
-- `removeChallenge(id)` — remove a specific challenge
-- `cleanupExpiredChallenges()` — remove all expired challenges
-
-For production, schedule periodic cleanup:
-
-```java
-scheduler.scheduleAtFixedRate(
-    () -> server.getChallengeRegistry().cleanupExpiredChallenges(),
-    1, 1, TimeUnit.HOURS);
-```
+Client sends: `POST /internal/challenge/verify/{challengeId}` with JSON body.
 
 ## DTOConvertible
 
-`DTOConvertible` is an **abstract class** (not an interface). Entities **extend** it to get automatic `asDTO()` serialization that excludes `@IgnoreDTO` and null fields.
+`DTOConvertible` is an **abstract class** (not an interface). Entities **extend** it to get automatic `asDTO()` serialization.
 
 ```java
 @Entity @Table(name = "users")
@@ -873,55 +811,40 @@ public class User extends DTOConvertible implements IdentifiableEntity, UserAuth
     private String name;
     private String email;
     @IgnoreDTO private String password; // excluded from asDTO()
-
-    // asDTO() returns Map<String, Object> of all non-@IgnoreDTO, non-null fields
-    // Nested DTOConvertible objects, collections, arrays, and maps are recursively converted
 }
 ```
 
-`asDTO()` calls `transform()` first (override to mutate fields before serialization). Field resolution uses cached reflection (`getCachedFields()`) and walks the class hierarchy up to `Object`.
-
-Pre-cache at startup: `server.preloadDto()` — scans classpath for all `DTOConvertible` subclasses and warms the field cache.
+Pre-cache at startup: `server.preloadDto()`.
 
 ## Key Rules
-
-### Database / Entities
 
 ### Lifecycle
 - Always call `server.start()` after all configuration is done.
 - `FiberServer.get()` is available after the constructor returns (singleton).
+- `stop()` performs graceful shutdown: stops Jetty and cleans up FileUploadManager.
 - Register authenticators on `server.getAuthResolver()` (Cookie + Bearer are registered by default).
-- Middleware added after controller registration won't apply to already-registered endpoints.
 - `registerController(Class<?>)` requires a no-arg constructor; `registerController(Object)` uses the provided instance.
+- Duplicate endpoint registrations are logged as warnings and silently ignored.
 
 ### Authentication & Sessions
 - `SessionService` is optional — without it, auth is pure stateless JWT and session methods on `UserAuth` throw `IllegalStateException`.
-- Both `AuthenticationService` and `SessionService` use Caffeine caches (30s TTL). `getUserById()` requires manual `evictUser(id)` after mutations outside the service. `SessionService` invalidates its cache automatically on all write operations.
-- JWT secret must be at least 32 characters in production (auto-generated with warning if default/short). Configure via `FIBER_SECRET_KEY` env var or `fiberconfig.json`.
-- JWT tokens embed `sessionId` in claims when `SessionService` is configured. `User-Agent` is also embedded and validated on each request.
-
-### Routing & Parameters
-- Path variables use `{name}` syntax and are extracted as named regex groups.
-- When multiple patterns match, the endpoint with fewest path variables wins.
-- `@RequestBody` validation errors return 400 automatically.
-- `@Param` supports `required = false` for optional query parameters.
+- JWT secret is **mandatory** in production mode. `start()` throws `IllegalStateException` if not configured. Use `enableDevelopmentMode()` for local dev.
+- JwtUtil uses lazy initialization — it does not require `FiberServer` to exist at class loading time.
+- Override `findUserByIdentifer()` in your `AuthenticationService` subclass for efficient user lookup.
 
 ### Security
-- `@RateLimit` counter resets on successful (200) responses. Supports `slidingWindow`, `perUser`, `key` for shared buckets, and class-level application.
-- `@AuditLog` supports custom data via `AuditContext.put(key, value)` inside endpoints. `AuditContext` is cleared automatically per request via `RouterServlet.finally`.
-- `@RequireRole` and `@Permission` are checked at both method and class level (method takes priority).
-- `addParentRole()` in `Role` takes a `Role` instance, not a String. `initializeParentRoles()` must be `public`.
+- `@NoCors` is enforced at runtime — CORS headers are skipped for annotated endpoints.
+- CSRF tokens use HMAC signatures bound to the server's JWT secret. Tokens are stable during GET requests.
+- Rate limiting uses bounded Caffeine caches (100k max entries) to prevent OOM under DDoS.
+- Permission checks return 403 Forbidden (not 401 Unauthorized).
+- Trusted proxies must be explicitly configured for X-Forwarded-For to be trusted.
+- OAuth2 provider URLs are validated against SSRF (no private IPs, timeouts enforced).
 
-### Challenges
-- Challenges are stored in-memory (`ConcurrentHashMap`), NOT in the database.
-- Challenges are NOT auto-removed after completion/failure — call `removeChallenge(id)` or schedule `cleanupExpiredChallenges()`.
-- `ChallengeController` is auto-registered on first `registerChallenge()` call.
-- The callback's `ResponseEntity` return value is sent directly to the client as the verification response.
-
-### File Uploads & Other
-- File upload filenames are automatically sanitized against path traversal.
-- Chunked uploads use `uploadId`, `chunkIndex`, `totalChunks` query params. Incomplete uploads auto-cleaned after 24h.
-- `DTOConvertible` is an abstract class (extend, not implement). `asDTO()` excludes `@IgnoreDTO` and null fields, recursively converts nested `DTOConvertible` objects. Pre-cache with `server.preloadDto()`.
+### Routing & Parameters
+- Static routes use O(1) HashMap lookup. Dynamic routes use linear scan.
+- The `Matcher` from route matching is passed to `handleRequest()` to avoid double regex evaluation.
+- Path variables use `{name}` syntax and are extracted as named regex groups.
+- `@RequestBody` validation errors return 400 automatically.
 
 ## Installation
 
@@ -929,7 +852,7 @@ Pre-cache at startup: `server.preloadDto()` — scans classpath for all `DTOConv
 
 ```groovy
 dependencies {
-    implementation 'sh.fyz:Fiber:2.0.0'
+    implementation 'sh.fyz:Fiber:2.0.2'
 }
 ```
 
@@ -939,6 +862,6 @@ dependencies {
 <dependency>
     <groupId>sh.fyz</groupId>
     <artifactId>Fiber</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.2</version>
 </dependency>
 ```

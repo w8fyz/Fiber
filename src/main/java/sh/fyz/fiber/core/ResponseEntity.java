@@ -60,6 +60,10 @@ public class ResponseEntity<T> {
         return new ResponseEntity<>(body, 401);
     }
 
+    public static <T> ResponseEntity<T> forbidden(T body) {
+        return new ResponseEntity<>(body, 403);
+    }
+
     public static <T> ResponseEntity<T> gone(T body) {
         return new ResponseEntity<>(body, 410);
     }

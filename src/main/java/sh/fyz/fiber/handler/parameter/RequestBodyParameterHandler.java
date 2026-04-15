@@ -7,6 +7,8 @@ import sh.fyz.fiber.util.JsonUtil;
 import sh.fyz.fiber.validation.ValidationRegistry;
 import sh.fyz.fiber.validation.ValidationResult;
 
+import sh.fyz.fiber.core.security.logging.AuditLogProcessor;
+
 import java.lang.reflect.Parameter;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
@@ -20,6 +22,7 @@ public class RequestBodyParameterHandler implements ParameterHandler {
     @Override
     public Object handle(Parameter parameter, HttpServletRequest request, HttpServletResponse response, Matcher pathMatcher) throws Exception {
         String body = request.getReader().lines().collect(Collectors.joining());
+        request.setAttribute(AuditLogProcessor.RAW_BODY_ATTRIBUTE, body);
         try {
             Object deserializedObject = JsonUtil.fromJson(body, parameter.getType());
             

@@ -9,32 +9,62 @@ import sh.fyz.fiber.util.JsonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class AuditLogProcessor {
     private static final Logger logger = LoggerFactory.getLogger(AuditLogProcessor.class);
 
+    public static final String RAW_BODY_ATTRIBUTE = "fiber.rawBody";
+
+    private static final ExecutorService auditExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
     @SuppressWarnings("unchecked")
     public static void logAuditEvent(HttpServletRequest req, HttpServletResponse resp, AuditLog auditLog, Method method, Object[] args, Object result) {
+        // Capture request data on the request thread
+        long timestamp = System.currentTimeMillis();
+        String ip = req.getRemoteAddr();
+        String userAgent = req.getHeader("User-Agent");
+        String httpMethod = req.getMethod();
+        String uri = req.getRequestURI();
+        int status = resp.getStatus();
+        Map<String, String[]> parameterMap = new HashMap<>(req.getParameterMap());
+        String rawBody = (String) req.getAttribute(RAW_BODY_ATTRIBUTE);
+        Map<String, Object> customData = AuditContext.getAll();
+
+        auditExecutor.submit(() -> {
+            try {
+                processAuditLog(timestamp, ip, userAgent, httpMethod, uri, status, parameterMap,
+                        rawBody, customData, auditLog, method, args, result);
+            } catch (Exception e) {
+                logger.error("Failed to process audit log", e);
+            }
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void processAuditLog(long timestamp, String ip, String userAgent, String httpMethod,
+                                         String uri, int status, Map<String, String[]> parameterMap,
+                                         String rawBody, Map<String, Object> customData,
+                                         AuditLog auditLog, Method method, Object[] args, Object result) {
         Map<String, Object> logData = new LinkedHashMap<>();
 
-        logData.put("timestamp", new Date().getTime());
-        logData.put("ip", req.getRemoteAddr());
-        logData.put("userAgent", req.getHeader("User-Agent"));
-        logData.put("method", req.getMethod());
-        logData.put("uri", req.getRequestURI());
+        logData.put("timestamp", timestamp);
+        logData.put("ip", ip);
+        logData.put("userAgent", userAgent);
+        logData.put("method", httpMethod);
+        logData.put("uri", uri);
         logData.put("action", auditLog.action());
-        logData.put("status", resp.getStatus());
+        logData.put("status", status);
 
         Map<String, String> queryParams = new HashMap<>();
-        req.getParameterMap().forEach((key, values) -> {
+        parameterMap.forEach((key, values) -> {
             if (values != null && values.length > 0) {
                 queryParams.put(key, values[0]);
             }
@@ -54,7 +84,7 @@ public class AuditLogProcessor {
                     String varName = matcher.group(1);
                     String varPattern = path.replace("{" + varName + "}", "([^/]+)");
                     Pattern valuePattern = Pattern.compile(varPattern);
-                    Matcher valueMatcher = valuePattern.matcher(req.getRequestURI());
+                    Matcher valueMatcher = valuePattern.matcher(uri);
                     if (valueMatcher.find()) {
                         pathVars.put(varName, valueMatcher.group(1));
                     }
@@ -68,20 +98,15 @@ public class AuditLogProcessor {
             }
         }
 
-        if (req.getMethod().equals("POST") || req.getMethod().equals("PUT")) {
+        if (("POST".equals(httpMethod) || "PUT".equals(httpMethod)) && rawBody != null && !rawBody.isEmpty()) {
             try {
-                BufferedReader reader = req.getReader();
-                String requestBody = reader.lines().collect(Collectors.joining());
-                if (!requestBody.isEmpty()) {
-                    try {
-                        Object jsonBody = JsonUtil.fromJson(requestBody, Object.class);
-                        logData.put("requestBody", jsonBody);
-                    } catch (Exception e) {
-                        logData.put("requestBody", requestBody);
-                    }
+                Object jsonBody = JsonUtil.fromJson(rawBody, Object.class);
+                if (auditLog.maskSensitiveData() && jsonBody instanceof Map) {
+                    maskMapFieldsRecursive((Map<String, Object>) jsonBody);
                 }
+                logData.put("requestBody", jsonBody);
             } catch (Exception e) {
-                logger.warn("Could not read request body", e);
+                logData.put("requestBody", rawBody);
             }
         }
 
@@ -94,13 +119,14 @@ public class AuditLogProcessor {
                 Object paramValue = args[i];
 
                 if (paramValue != null) {
-                    if (auditLog.maskSensitiveData()) {
-                        paramValue = maskSensitiveFields(paramValue);
-                    }
                     try {
+                        // Clone via JSON round-trip to avoid mutating original objects
                         String jsonValue = JsonUtil.toJson(paramValue);
-                        Object serializedValue = JsonUtil.fromJson(jsonValue, Object.class);
-                        methodParams.put(paramName, serializedValue);
+                        Object clonedValue = JsonUtil.fromJson(jsonValue, Object.class);
+                        if (auditLog.maskSensitiveData() && clonedValue instanceof Map) {
+                            maskMapFieldsRecursive((Map<String, Object>) clonedValue);
+                        }
+                        methodParams.put(paramName, clonedValue);
                     } catch (Exception e) {
                         methodParams.put(paramName, paramValue.toString());
                     }
@@ -122,20 +148,8 @@ public class AuditLogProcessor {
             }
         }
 
-        // Collect custom data from AuditContext (set by the endpoint handler)
-        Map<String, Object> customData = AuditContext.getAll();
         if (customData != null) {
             logData.put("customData", customData);
-        }
-
-        if (auditLog.maskSensitiveData() && logData.containsKey("requestBody")) {
-            Object body = logData.get("requestBody");
-            if (body instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> bodyMap = (Map<String, Object>) body;
-                maskMapFields(bodyMap);
-                logData.put("requestBody", bodyMap);
-            }
         }
 
         try {
@@ -169,30 +183,24 @@ public class AuditLogProcessor {
                 ));
             }
         } catch (Exception e) {
-            logger.error("Failed to serialize log data", e);
-        } finally {
-            AuditContext.clear();
+            logger.error("Failed to serialize audit log data", e);
         }
     }
 
-    private static Object maskSensitiveFields(Object value) {
-        if (value == null) return null;
-        for (Field field : value.getClass().getDeclaredFields()) {
-            if (field.isAnnotationPresent(PasswordField.class)) {
-                field.setAccessible(true);
-                try {
-                    field.set(value, "***MASKED***");
-                } catch (IllegalAccessException ignored) {}
-            }
-        }
-        return value;
-    }
-
-    private static void maskMapFields(Map<String, Object> map) {
-        for (String key : map.keySet()) {
-            String lower = key.toLowerCase();
+    @SuppressWarnings("unchecked")
+    private static void maskMapFieldsRecursive(Map<String, Object> map) {
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String lower = entry.getKey().toLowerCase();
             if (lower.contains("password") || lower.contains("secret") || lower.contains("token")) {
-                map.put(key, "***MASKED***");
+                entry.setValue("***MASKED***");
+            } else if (entry.getValue() instanceof Map) {
+                maskMapFieldsRecursive((Map<String, Object>) entry.getValue());
+            } else if (entry.getValue() instanceof List) {
+                for (Object item : (List<?>) entry.getValue()) {
+                    if (item instanceof Map) {
+                        maskMapFieldsRecursive((Map<String, Object>) item);
+                    }
+                }
             }
         }
     }

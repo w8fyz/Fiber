@@ -4,20 +4,17 @@ import sh.fyz.fiber.core.authentication.entities.Role;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Registry for managing roles and their hierarchies in the system.
- */
 public class RoleRegistry {
     private final Map<String, Role> roles;
     private final Map<String, Class<? extends Role>> roleClasses;
 
     public RoleRegistry() {
-        this.roles = new HashMap<>();
-        this.roleClasses = new HashMap<>();
+        this.roles = new ConcurrentHashMap<>();
+        this.roleClasses = new ConcurrentHashMap<>();
     }
 
     /**
@@ -36,7 +33,6 @@ public class RoleRegistry {
             // Create and store the role instance
             roles.put(identifier, role);
             
-            //System.out.println("Registered role: " + identifier);
         } catch (Exception e) {
             throw new RuntimeException("Failed to register role class: " + roleClass.getName(), e);
         }
@@ -79,8 +75,7 @@ public class RoleRegistry {
                     }
                 }
             } catch (Exception e) {
-                System.err.println("Failed to set up parent roles for: " + role.getIdentifier());
-                e.printStackTrace();
+                throw new RuntimeException("Failed to set up parent roles for: " + role.getIdentifier(), e);
             }
         }
     }

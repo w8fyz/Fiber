@@ -8,9 +8,6 @@ import sh.fyz.fiber.core.authentication.Authenticator;
 import sh.fyz.fiber.core.authentication.AuthScheme;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.JwtUtil;
-import sh.fyz.fiber.core.session.FiberSession;
-import sh.fyz.fiber.core.session.SessionContext;
-import sh.fyz.fiber.core.session.SessionService;
 
 public class CookieAuthenticator implements Authenticator {
     private static final String ACCESS_TOKEN_COOKIE = "access_token";
@@ -33,7 +30,7 @@ public class CookieAuthenticator implements Authenticator {
                 Claims claims = JwtUtil.validateToken(token, request.getRemoteAddr(), request.getHeader("User-Agent"));
 
                 if (claims != null) {
-                    if (!validateSession(claims)) {
+                    if (!SessionValidator.validate(claims)) {
                         return null;
                     }
 
@@ -47,25 +44,5 @@ public class CookieAuthenticator implements Authenticator {
         }
 
         return null;
-    }
-
-    private boolean validateSession(Claims claims) {
-        String sessionId = claims.get("sessionId", String.class);
-        if (sessionId == null) {
-            return true;
-        }
-
-        SessionService sessionService = FiberServer.get().getSessionService();
-        if (sessionService == null) {
-            return true;
-        }
-
-        FiberSession session = sessionService.getSession(sessionId);
-        if (session == null) {
-            return false;
-        }
-
-        SessionContext.set(session);
-        return true;
     }
 }

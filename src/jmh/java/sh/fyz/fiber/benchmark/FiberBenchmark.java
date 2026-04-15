@@ -2,8 +2,8 @@ package sh.fyz.fiber.benchmark;
 
 import org.openjdk.jmh.annotations.*;
 import sh.fyz.architect.Architect;
-import sh.fyz.architect.persistant.DatabaseCredentials;
-import sh.fyz.architect.persistant.sql.provider.PostgreSQLAuth;
+import sh.fyz.architect.persistent.DatabaseCredentials;
+import sh.fyz.architect.persistent.sql.provider.PostgreSQLAuth;
 import sh.fyz.architect.repositories.GenericRepository;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.ResponseEntity;

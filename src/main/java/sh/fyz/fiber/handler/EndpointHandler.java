@@ -1,7 +1,6 @@
 package sh.fyz.fiber.handler;
 
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.annotations.params.AuthenticatedUser;
@@ -28,7 +27,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Set;
 
-public class EndpointHandler extends HttpServlet {
+public class EndpointHandler {
     private final Object controller;
     private final Method method;
     private final Pattern pathPattern;
@@ -107,6 +106,10 @@ public class EndpointHandler extends HttpServlet {
     }
 
     public Object handleRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        return handleRequest(req, resp, null);
+    }
+
+    public Object handleRequest(HttpServletRequest req, HttpServletResponse resp, Matcher precomputedMatcher) throws ServletException, IOException {
         SecurityResult security = securityPipeline.execute(req, resp);
         if (!security.shouldProceed()) {
             return null;
@@ -119,10 +122,13 @@ public class EndpointHandler extends HttpServlet {
         }
 
         String path = req.getRequestURI();
-        Matcher matcher = pathPattern.matcher(path);
-        if (!matcher.matches()) {
-            ErrorResponse.send(resp, path, HttpServletResponse.SC_NOT_FOUND, "Path not found");
-            return null;
+        Matcher matcher = precomputedMatcher;
+        if (matcher == null) {
+            matcher = pathPattern.matcher(path);
+            if (!matcher.matches()) {
+                ErrorResponse.send(resp, path, HttpServletResponse.SC_NOT_FOUND, "Path not found");
+                return null;
+            }
         }
 
         try {
@@ -152,6 +158,14 @@ public class EndpointHandler extends HttpServlet {
 
     public int getPathVariableCount() {
         return pathVariableCount;
+    }
+
+    public boolean isNoCors() {
+        return noCors;
+    }
+
+    public Pattern getPathPattern() {
+        return pathPattern;
     }
 
     public static String normalizePath(String path) {

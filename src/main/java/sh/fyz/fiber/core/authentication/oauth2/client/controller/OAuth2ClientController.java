@@ -3,12 +3,12 @@ package sh.fyz.fiber.core.authentication.oauth2.client.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
+import sh.fyz.fiber.annotations.params.AuthenticatedUser;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.annotations.params.Param;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
-import sh.fyz.fiber.core.authentication.AuthMiddleware;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.entities.OAuth2Client;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
@@ -34,38 +34,26 @@ public class OAuth2ClientController {
             @Param("client_id") String clientId,
             @Param("redirect_uri") String redirectUri,
             @Param("response_type") String responseType,
-            @Param("state") String state,
+            @Param(value = "state", required = false) String state,
+            @AuthenticatedUser UserAuth user,
             HttpServletRequest request,
             HttpServletResponse response) {
-        
-        // Validate client
+
         if (!clientService.validateRedirectUri(clientId, redirectUri)) {
             return ResponseEntity.badRequest("Invalid client or redirect URI");
         }
 
-        // Validate response type
         if (!"code".equals(responseType)) {
             return ResponseEntity.badRequest("Unsupported response type");
         }
 
-        // Check if user is authenticated
-        UserAuth user = AuthMiddleware.getCurrentUser(request);
-        if (user == null) {
-            String loginUrl = "/auth/login?return_to=/oauth/authorize?" + request.getQueryString();
-            response.setHeader("Location", loginUrl);
-            response.setStatus(HttpServletResponse.SC_FOUND);
-            return null;
-        }
-
-        // Generate authorization code
         String code = clientService.generateAuthorizationCode(user, clientId);
-        
-        // Build redirect URL with code
+
         String redirectUrl = redirectUri + "?code=" + URLEncoder.encode(code, StandardCharsets.UTF_8);
         if (state != null) {
             redirectUrl += "&state=" + URLEncoder.encode(state, StandardCharsets.UTF_8);
         }
-        
+
         response.setHeader("Location", redirectUrl);
         response.setStatus(HttpServletResponse.SC_FOUND);
         return null;
@@ -73,27 +61,24 @@ public class OAuth2ClientController {
 
     @RequestMapping(value = "/token", method = RequestMapping.Method.POST)
     public ResponseEntity<?> token(@Param("code") String code, OAuth2ApplicationInfo applicationInfo) {
-        
-        // Validate client credentials
+
         OAuth2Client client = clientService.getClientByCredentials(applicationInfo.clientId(), applicationInfo.clientSecret());
         if (client == null || !client.isEnabled()) {
             return ResponseEntity.unauthorized("Invalid client credentials");
         }
 
-        // Validate and exchange authorization code
         OAuth2ClientService.AuthorizationCode authCode = clientService.validateAuthorizationCode(code, applicationInfo.clientId());
         if (authCode == null) {
             return ResponseEntity.unauthorized("Invalid authorization code");
         }
 
-        // Generate access token
         String accessToken = clientService.generateAccessToken(authCode.getUser(), applicationInfo.clientId());
-        
-        Map<String, String> response = new HashMap<>();
-        response.put("access_token", accessToken);
-        response.put("token_type", "Bearer");
-        response.put("expires_in", "3600");
-        
-        return ResponseEntity.ok(response);
+
+        Map<String, String> responseBody = new HashMap<>();
+        responseBody.put("access_token", accessToken);
+        responseBody.put("token_type", "Bearer");
+        responseBody.put("expires_in", "3600");
+
+        return ResponseEntity.ok(responseBody);
     }
-} 
+}
