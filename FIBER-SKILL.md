@@ -852,7 +852,7 @@ Pre-cache at startup: `server.preloadDto()`.
 
 ```groovy
 dependencies {
-    implementation 'sh.fyz:Fiber:2.0.2'
+    implementation 'sh.fyz:Fiber:2.1.2'
 }
 ```
 
@@ -862,6 +862,6 @@ dependencies {
 <dependency>
     <groupId>sh.fyz</groupId>
     <artifactId>Fiber</artifactId>
-    <version>2.0.2</version>
+    <version>2.1.2</version>
 </dependency>
 ```
