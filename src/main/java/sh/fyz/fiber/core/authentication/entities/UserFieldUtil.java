@@ -92,11 +92,10 @@ public class UserFieldUtil {
         }
     }
 
-    // Robust defaults — adjustable via setPasswordPolicy / setRequireSpecial.
-    private static int minPasswordLength = 8;
-    private static boolean requireUppercase = true;
-    private static boolean requireDigit = true;
-    private static boolean requireSpecial = true;
+    private static int minPasswordLength = 0;
+    private static boolean requireUppercase = false;
+    private static boolean requireDigit = false;
+    private static boolean requireSpecial = false;
     private static boolean rejectBlank = true;
 
     public static void setPasswordPolicy(int minLength, boolean upperCase, boolean digit) {
@@ -112,6 +111,14 @@ public class UserFieldUtil {
         requireDigit = digit;
         requireSpecial = special;
         rejectBlank = rejectBlankPassword;
+    }
+
+    /**
+     * Whether blank (null, empty, whitespace-only) passwords are rejected. Blank
+     * passwords are rejected by default and this should almost never be disabled.
+     */
+    public static void setRejectBlankPassword(boolean reject) {
+        rejectBlank = reject;
     }
 
     public static void setPassword(UserAuth user, String password) {

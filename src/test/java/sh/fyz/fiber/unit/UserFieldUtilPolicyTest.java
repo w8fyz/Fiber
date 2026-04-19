@@ -16,8 +16,7 @@ class UserFieldUtilPolicyTest {
 
     @AfterAll
     static void restore() {
-        // Keep the library default (8, upper, digit, special, reject-blank) for the rest of the suite.
-        UserFieldUtil.setPasswordPolicy(8, true, true, true, true);
+        UserFieldUtil.setPasswordPolicy(0, false, false, false, true);
     }
 
     @Test
