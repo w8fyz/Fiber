@@ -19,11 +19,27 @@ public class PathVariableParameterHandler implements ParameterHandler {
     @Override
     public Object handle(Parameter parameter, HttpServletRequest request, HttpServletResponse response, Matcher pathMatcher) throws Exception {
         PathVariable pathVar = parameter.getAnnotation(PathVariable.class);
-        String value = pathMatcher.group(pathVar.value());
+        String name = pathVar.value();
+
+        String value;
+        try {
+            value = pathMatcher.group(name);
+        } catch (IllegalArgumentException e) {
+            // Endpoint route is missing the named capture group — programmer error.
+            throw new IllegalStateException(
+                    "Path variable '" + name + "' is not declared in the route pattern", e);
+        }
+
+        if (value == null) {
+            throw new IllegalArgumentException("Missing path variable: " + name);
+        }
 
         Object convertedValue = TypeConverter.convert(value, parameter.getType());
-        ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
+        if (convertedValue == null && parameter.getType().isPrimitive()) {
+            throw new IllegalArgumentException("Invalid value for path variable: " + name);
+        }
 
+        ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
         if (!result.isValid()) {
             throw new IllegalArgumentException(result.getFirstError());
         }

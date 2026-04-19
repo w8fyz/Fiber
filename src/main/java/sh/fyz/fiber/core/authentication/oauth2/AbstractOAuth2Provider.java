@@ -61,16 +61,59 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
                 throw new IllegalArgumentException("OAuth2 " + name + " must use HTTP(S): " + url);
             }
             String host = uri.getHost();
-            if (host != null) {
-                InetAddress addr = InetAddress.getByName(host);
-                if (addr.isLoopbackAddress() || addr.isSiteLocalAddress() || addr.isLinkLocalAddress()) {
-                    throw new IllegalArgumentException("OAuth2 " + name + " must not target private/loopback addresses: " + url);
-                }
+            if (host == null) {
+                throw new IllegalArgumentException("OAuth2 " + name + " must have a host: " + url);
+            }
+            // Resolve and check ALL addresses (multi-record DNS) — guard against rebinding.
+            InetAddress[] addrs = InetAddress.getAllByName(host);
+            for (InetAddress addr : addrs) {
+                validateResolvedAddress(addr, name, url);
             }
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid OAuth2 " + name + " URL: " + url, e);
+        }
+    }
+
+    /**
+     * Reject any address that is loopback, link-local, site-local (RFC 1918), unique
+     * local (IPv6 ULA fc00::/7), multicast, or any-local. Performed at <b>each</b>
+     * request to defeat DNS rebinding.
+     */
+    public static void validateResolvedAddress(InetAddress addr, String name, String url) {
+        if (addr.isLoopbackAddress()
+                || addr.isAnyLocalAddress()
+                || addr.isLinkLocalAddress()
+                || addr.isSiteLocalAddress()
+                || addr.isMulticastAddress()) {
+            throw new IllegalArgumentException(
+                    "OAuth2 " + name + " resolves to a forbidden address (" + addr.getHostAddress() + "): " + url);
+        }
+        // IPv6 unique-local fc00::/7 — InetAddress lacks a flag for it.
+        byte[] bytes = addr.getAddress();
+        if (bytes.length == 16 && (bytes[0] & 0xFE) == 0xFC) {
+            throw new IllegalArgumentException(
+                    "OAuth2 " + name + " resolves to an IPv6 ULA address (" + addr.getHostAddress() + "): " + url);
+        }
+    }
+
+    /** Re-resolve and re-validate the host of {@code url} (called at each request). */
+    private static void revalidateEndpointAtRequest(String url, String name) {
+        try {
+            URI uri = URI.create(url);
+            String host = uri.getHost();
+            if (host == null) {
+                throw new IllegalArgumentException("OAuth2 " + name + " is missing host: " + url);
+            }
+            InetAddress[] addrs = InetAddress.getAllByName(host);
+            for (InetAddress addr : addrs) {
+                validateResolvedAddress(addr, name, url);
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to resolve OAuth2 " + name + ": " + url, e);
         }
     }
 
@@ -124,6 +167,7 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
     }
 
     protected String exchangeCodeForToken(String code, String redirectUri) {
+        revalidateEndpointAtRequest(tokenEndpoint, "tokenEndpoint");
         try {
             String credentials = Base64.getEncoder().encodeToString(
                 (clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
@@ -153,6 +197,7 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
     }
 
     protected Map<String, Object> getUserInfoFromToken(String accessToken) {
+        revalidateEndpointAtRequest(userInfoEndpoint, "userInfoEndpoint");
         try {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(userInfoEndpoint))

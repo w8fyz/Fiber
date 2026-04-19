@@ -1,17 +1,18 @@
 package sh.fyz.fiber.core.email;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.logging.Logger;
-import java.util.logging.Level;
 
 /**
  * Utility class for handling CSS in emails, including converting CSS to inline styles.
  */
 public class EmailCssUtils {
-    private static final Logger LOGGER = Logger.getLogger(EmailCssUtils.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmailCssUtils.class);
     
     /**
      * Converts CSS from a style tag to inline styles in the HTML content.
@@ -21,7 +22,7 @@ public class EmailCssUtils {
      */
     public static String convertCssToInline(String htmlContent) {
         if (htmlContent == null || htmlContent.isEmpty()) {
-            LOGGER.warning("HTML content is null or empty");
+            LOGGER.warn("HTML content is null or empty");
             return htmlContent;
         }
         
@@ -43,7 +44,7 @@ public class EmailCssUtils {
             
             return result;
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.warn("Failed to inline CSS into HTML email body", e);
             return htmlContent;
         }
     }

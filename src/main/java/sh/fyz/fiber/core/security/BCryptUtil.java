@@ -1,35 +1,55 @@
 package sh.fyz.fiber.core.security;
 
-import org.mindrot.jbcrypt.BCrypt;
+import at.favre.lib.crypto.bcrypt.BCrypt;
+
+import java.nio.charset.StandardCharsets;
 
 /**
- * Classe utilitaire pour gérer les opérations de hachage avec BCrypt.
+ * BCrypt password hashing helper backed by {@code at.favre.lib:bcrypt}.
+ *
+ * <p>The work factor is configurable via {@link #setCost(int)} and defaults to {@code 12},
+ * which matches the OWASP 2024 recommendation for interactive logins. Hashes generated
+ * by the previous {@code jbcrypt} implementation ({@code $2a$}) remain verifiable.</p>
  */
 public class BCryptUtil {
-    
-    private BCryptUtil() {
-        // Empêche l'instanciation
+
+    private static volatile int cost = 12;
+
+    private BCryptUtil() {}
+
+    /** @return current BCrypt work factor (cost). */
+    public static int getCost() {
+        return cost;
     }
 
     /**
-     * Hache un mot de passe en utilisant BCrypt.
-     * @param password Le mot de passe en clair à hacher
-     * @return Le mot de passe haché
+     * Override the BCrypt work factor used for new hashes. Must be in {@code [4, 31]}.
      */
+    public static void setCost(int newCost) {
+        if (newCost < 4 || newCost > 31) {
+            throw new IllegalArgumentException("BCrypt cost must be between 4 and 31");
+        }
+        cost = newCost;
+    }
+
     public static String hashPassword(String password) {
-        return BCrypt.hashpw(password, BCrypt.gensalt());
+        if (password == null) {
+            throw new IllegalArgumentException("Password cannot be null");
+        }
+        return BCrypt.withDefaults().hashToString(cost, password.toCharArray());
     }
 
-    /**
-     * Vérifie si un mot de passe en clair correspond à un hash.
-     * @param password Le mot de passe en clair à vérifier
-     * @param hashedPassword Le hash du mot de passe stocké
-     * @return true si le mot de passe correspond, false sinon
-     */
     public static boolean checkPassword(String password, String hashedPassword) {
-        if (password == null || hashedPassword == null) {
+        if (password == null || hashedPassword == null || hashedPassword.isEmpty()) {
             return false;
         }
-        return BCrypt.checkpw(password, hashedPassword);
+        try {
+            BCrypt.Result result = BCrypt.verifyer()
+                    .verify(password.getBytes(StandardCharsets.UTF_8),
+                            hashedPassword.getBytes(StandardCharsets.UTF_8));
+            return result.verified;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
-} 
+}

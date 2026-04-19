@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RoleRegistry {
     private final Map<String, Role> roles;
     private final Map<String, Class<? extends Role>> roleClasses;
+    private volatile boolean frozen = false;
 
     public RoleRegistry() {
         this.roles = new ConcurrentHashMap<>();
@@ -18,21 +19,32 @@ public class RoleRegistry {
     }
 
     /**
+     * Freeze the registry. Subsequent calls to {@link #registerRoleClass} or
+     * {@link #registerRoleClasses} throw {@link IllegalStateException}.
+     * Called automatically by {@code FiberServer.start()}.
+     */
+    public synchronized void freeze() {
+        this.frozen = true;
+    }
+
+    public boolean isFrozen() {
+        return frozen;
+    }
+
+    /**
      * Register a role class in the system
      * @param roleClass The role class to register
      */
-    public void registerRoleClass(Class<? extends Role> roleClass) {
+    public synchronized void registerRoleClass(Class<? extends Role> roleClass) {
+        if (frozen) {
+            throw new IllegalStateException(
+                    "Roles cannot be registered after FiberServer has started");
+        }
         try {
-            // Create an instance to get the identifier
             Role role = createRoleInstance(roleClass);
             String identifier = role.getIdentifier();
-            
-            // Store the role class
             roleClasses.put(identifier, roleClass);
-            
-            // Create and store the role instance
             roles.put(identifier, role);
-            
         } catch (Exception e) {
             throw new RuntimeException("Failed to register role class: " + roleClass.getName(), e);
         }
@@ -42,13 +54,15 @@ public class RoleRegistry {
      * Register multiple role classes in the system
      * @param roleClasses The role classes to register
      */
-    public void registerRoleClasses(Class<? extends Role>... roleClasses) {
-        // First, register all roles
+    @SafeVarargs
+    public final synchronized void registerRoleClasses(Class<? extends Role>... roleClasses) {
+        if (frozen) {
+            throw new IllegalStateException(
+                    "Roles cannot be registered after FiberServer has started");
+        }
         for (Class<? extends Role> roleClass : roleClasses) {
             registerRoleClass(roleClass);
         }
-        
-        // Then, set up parent roles
         setupParentRoles();
     }
     

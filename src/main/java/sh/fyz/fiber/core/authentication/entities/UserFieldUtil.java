@@ -92,14 +92,26 @@ public class UserFieldUtil {
         }
     }
 
-    private static int minPasswordLength = 0;
-    private static boolean requireUppercase = false;
-    private static boolean requireDigit = false;
+    // Robust defaults — adjustable via setPasswordPolicy / setRequireSpecial.
+    private static int minPasswordLength = 8;
+    private static boolean requireUppercase = true;
+    private static boolean requireDigit = true;
+    private static boolean requireSpecial = true;
+    private static boolean rejectBlank = true;
 
     public static void setPasswordPolicy(int minLength, boolean upperCase, boolean digit) {
         minPasswordLength = minLength;
         requireUppercase = upperCase;
         requireDigit = digit;
+    }
+
+    public static void setPasswordPolicy(int minLength, boolean upperCase, boolean digit,
+                                          boolean special, boolean rejectBlankPassword) {
+        minPasswordLength = minLength;
+        requireUppercase = upperCase;
+        requireDigit = digit;
+        requireSpecial = special;
+        rejectBlank = rejectBlankPassword;
     }
 
     public static void setPassword(UserAuth user, String password) {
@@ -118,17 +130,33 @@ public class UserFieldUtil {
     }
 
     public static void validatePasswordStrength(String password) {
-        if (minPasswordLength <= 0 && !requireUppercase && !requireDigit) {
+        if (rejectBlank && (password == null || password.isBlank())) {
+            throw new IllegalArgumentException("Password cannot be blank");
+        }
+        if (password == null) {
             return;
         }
-        if (password == null || password.length() < minPasswordLength) {
+        if (minPasswordLength > 0 && password.length() < minPasswordLength) {
             throw new IllegalArgumentException("Password must be at least " + minPasswordLength + " characters long");
         }
-        if (requireUppercase && password.equals(password.toLowerCase())) {
+
+        boolean hasUpper = false, hasLower = false, hasDigit = false, hasSpecial = false;
+        for (int i = 0; i < password.length(); i++) {
+            char c = password.charAt(i);
+            if (Character.isUpperCase(c)) hasUpper = true;
+            else if (Character.isLowerCase(c)) hasLower = true;
+            else if (Character.isDigit(c)) hasDigit = true;
+            else if (!Character.isWhitespace(c)) hasSpecial = true;
+        }
+
+        if (requireUppercase && !hasUpper) {
             throw new IllegalArgumentException("Password must contain at least one uppercase letter");
         }
-        if (requireDigit && !password.matches(".*\\d.*")) {
+        if (requireDigit && !hasDigit) {
             throw new IllegalArgumentException("Password must contain at least one digit");
+        }
+        if (requireSpecial && !hasSpecial) {
+            throw new IllegalArgumentException("Password must contain at least one special character");
         }
     }
 

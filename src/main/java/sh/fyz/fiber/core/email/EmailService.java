@@ -5,20 +5,20 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.logging.Logger;
-import java.util.logging.Level;
 
 public class EmailService {
+
+    private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
+
     private final jakarta.mail.Session session;
     private final String from;
     private final String username;
@@ -75,7 +75,7 @@ public class EmailService {
     }
 
     public CompletableFuture<Void> sendEmail(Email email) {
-        return CompletableFuture.runAsync(() -> {
+        return CompletableFuture.<Void>runAsync(() -> {
             try {
                 // Process template if specified
                 if (email.getTemplatePath() != null) {
@@ -104,7 +104,7 @@ public class EmailService {
                         try {
                             htmlContent = EmailCssUtils.convertCssToInline(htmlContent);
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            logger.warn("Failed to inline CSS in email HTML body — sending raw HTML", e);
                         }
                     }
                     
@@ -125,7 +125,12 @@ public class EmailService {
                 message.setContent(multipart);
                 Transport.send(message);
             } catch (MessagingException | IOException e) {
-                e.printStackTrace();
+                logger.error("Failed to send email to {}", email.getTo(), e);
+                throw new EmailDeliveryException("Failed to send email", e);
+            }
+        }).whenComplete((v, ex) -> {
+            if (ex != null) {
+                logger.error("Email delivery future completed exceptionally", ex);
             }
         });
     }
@@ -162,7 +167,7 @@ public class EmailService {
             try {
                 htmlContent = EmailCssUtils.convertCssToInline(htmlContent);
             } catch (Exception e) {
-                e.printStackTrace();
+                logger.warn("Failed to inline CSS for template {} — sending raw HTML", templatePath, e);
             }
         }
         

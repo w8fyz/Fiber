@@ -28,6 +28,27 @@ public class RouterServlet extends HttpServlet {
         this.endpointRegistry = endpointRegistry;
     }
 
+    private static String jsonEscape(String s) {
+        if (s == null) return "\"\"";
+        StringBuilder sb = new StringBuilder(s.length() + 16).append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) sb.append(String.format("\\u%04x", (int) c));
+                    else sb.append(c);
+                }
+            }
+        }
+        sb.append('"');
+        return sb.toString();
+    }
+
     @Override
     protected void service(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try {
@@ -54,23 +75,14 @@ public class RouterServlet extends HttpServlet {
                 }
             }
 
-            // Fallback to linear scan for dynamic routes
+            // Trie-based lookup for dynamic routes (O(P) instead of O(N))
             if (matchedEndpoint == null) {
-                String methodSuffix = ":" + requestMethod;
-                for (Map.Entry<String, EndpointHandler> entry : endpoints.entrySet()) {
-                    if (!entry.getKey().endsWith(methodSuffix)) {
-                        continue;
-                    }
-                    EndpointHandler endpoint = entry.getValue();
-                    Matcher m = endpoint.getPathPattern().matcher(requestUri);
+                EndpointHandler trieMatch = endpointRegistry.getDynamicTrie().find(requestUri, requestMethod);
+                if (trieMatch != null) {
+                    Matcher m = trieMatch.getPathPattern().matcher(requestUri);
                     if (m.matches()) {
-                        if (matchedEndpoint == null || endpoint.getPathVariableCount() < matchedEndpoint.getPathVariableCount()) {
-                            matchedEndpoint = endpoint;
-                            matchedMatcher = m;
-                        }
-                        if (matchedEndpoint.getPathVariableCount() == 0) {
-                            break;
-                        }
+                        matchedEndpoint = trieMatch;
+                        matchedMatcher = m;
                     }
                 }
             }
@@ -107,6 +119,13 @@ public class RouterServlet extends HttpServlet {
 
             if (resp.getStatus() == 200) {
                 RateLimitProcessor.onSuccess(method, req);
+            }
+        } catch (IllegalArgumentException e) {
+            logger.debug("Bad request: {} {} — {}", req.getMethod(), req.getRequestURI(), e.getMessage());
+            if (!resp.isCommitted()) {
+                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                String body = "{\"status\":400,\"message\":" + jsonEscape(e.getMessage()) + "}";
+                resp.getOutputStream().write(body.getBytes());
             }
         } catch (Exception e) {
             logger.error("Error processing request: {} {}", req.getMethod(), req.getRequestURI(), e);

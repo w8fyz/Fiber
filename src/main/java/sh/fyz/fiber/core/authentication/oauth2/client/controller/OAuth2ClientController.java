@@ -4,13 +4,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.params.AuthenticatedUser;
+import sh.fyz.fiber.annotations.params.Param;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
-import sh.fyz.fiber.annotations.params.Param;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
-import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.entities.OAuth2Client;
+import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
 
@@ -35,6 +35,8 @@ public class OAuth2ClientController {
             @Param("redirect_uri") String redirectUri,
             @Param("response_type") String responseType,
             @Param(value = "state", required = false) String state,
+            @Param(value = "code_challenge", required = false) String codeChallenge,
+            @Param(value = "code_challenge_method", required = false) String codeChallengeMethod,
             @AuthenticatedUser UserAuth user,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -47,7 +49,13 @@ public class OAuth2ClientController {
             return ResponseEntity.badRequest("Unsupported response type");
         }
 
-        String code = clientService.generateAuthorizationCode(user, clientId);
+        String code;
+        try {
+            code = clientService.generateAuthorizationCode(user, clientId, redirectUri,
+                    codeChallenge, codeChallengeMethod);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest(e.getMessage());
+        }
 
         String redirectUrl = redirectUri + "?code=" + URLEncoder.encode(code, StandardCharsets.UTF_8);
         if (state != null) {
@@ -60,14 +68,18 @@ public class OAuth2ClientController {
     }
 
     @RequestMapping(value = "/token", method = RequestMapping.Method.POST)
-    public ResponseEntity<?> token(@Param("code") String code, OAuth2ApplicationInfo applicationInfo) {
+    public ResponseEntity<?> token(@Param("code") String code,
+                                   @Param(value = "redirect_uri", required = false) String redirectUri,
+                                   @Param(value = "code_verifier", required = false) String codeVerifier,
+                                   OAuth2ApplicationInfo applicationInfo) {
 
         OAuth2Client client = clientService.getClientByCredentials(applicationInfo.clientId(), applicationInfo.clientSecret());
         if (client == null || !client.isEnabled()) {
             return ResponseEntity.unauthorized("Invalid client credentials");
         }
 
-        OAuth2ClientService.AuthorizationCode authCode = clientService.validateAuthorizationCode(code, applicationInfo.clientId());
+        OAuth2ClientService.AuthorizationCode authCode = clientService.validateAuthorizationCode(
+                code, applicationInfo.clientId(), redirectUri, codeVerifier);
         if (authCode == null) {
             return ResponseEntity.unauthorized("Invalid authorization code");
         }

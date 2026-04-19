@@ -12,6 +12,7 @@ import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
 import sh.fyz.fiber.core.session.FiberSession;
 import sh.fyz.fiber.core.session.SessionContext;
 import sh.fyz.fiber.core.session.SessionService;
+import sh.fyz.fiber.middleware.impl.CsrfMiddleware;
 import sh.fyz.fiber.util.HttpUtil;
 
 import java.time.Duration;
@@ -148,9 +149,30 @@ public abstract class AuthenticationService<T extends UserAuth> {
 
         response.addHeader("Set-Cookie",
             "refresh_token=" + refreshToken + refreshCookieConfig.buildCookieAttributesWithMaxAge(request.getHeader("Origin"), cookieConfig.getRefreshTokenMaxAge()));
+
+        // Rotate CSRF token after a successful authentication change to prevent
+        // session-fixation style CSRF attacks.
+        try {
+            if (FiberServer.get().getCsrfMiddleware() != null) {
+                CsrfMiddleware.rotateToken(response);
+            }
+        } catch (Exception ignored) {
+            // CSRF not configured — nothing to rotate.
+        }
     }
 
     public void clearAuthCookies(HttpServletRequest request, HttpServletResponse response) {
+        // Revoke the refresh token so it cannot be replayed even if it was leaked
+        // (network capture, malicious browser extension, etc.).
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie c : cookies) {
+                if ("refresh_token".equals(c.getName())) {
+                    JwtUtil.revokeRefreshToken(c.getValue());
+                }
+            }
+        }
+
         SessionService sessionService = FiberServer.get().getSessionService();
         if (sessionService != null) {
             FiberSession currentSession = SessionContext.current();

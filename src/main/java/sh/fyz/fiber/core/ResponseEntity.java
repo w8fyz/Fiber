@@ -87,6 +87,22 @@ public class ResponseEntity<T> {
         return this;
     }
 
+    public T getBody() {
+        return body;
+    }
+
+    public int getStatus() {
+        return status;
+    }
+
+    public Map<String, String> getHeaders() {
+        return Collections.unmodifiableMap(headers);
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
     public void write(HttpServletRequest request, HttpServletResponse response) throws IOException {
         if (response.isCommitted()) {
             return;

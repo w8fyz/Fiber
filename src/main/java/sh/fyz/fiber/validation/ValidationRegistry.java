@@ -22,17 +22,23 @@ public class ValidationRegistry {
     private static List<FieldValidationInfo> getFieldInfo(Class<?> clazz) {
         return fieldCache.computeIfAbsent(clazz, c -> {
             List<FieldValidationInfo> infos = new ArrayList<>();
-            for (Field field : c.getDeclaredFields()) {
-                List<Annotation> validatable = new ArrayList<>();
-                for (Annotation annotation : field.getAnnotations()) {
-                    if (validators.containsKey(annotation.annotationType())) {
-                        validatable.add(annotation);
+            // Walk the type hierarchy so inherited fields are also validated. Aligned
+            // with DTOConvertible.getCachedFields().
+            Class<?> current = c;
+            while (current != null && current != Object.class) {
+                for (Field field : current.getDeclaredFields()) {
+                    List<Annotation> validatable = new ArrayList<>();
+                    for (Annotation annotation : field.getAnnotations()) {
+                        if (validators.containsKey(annotation.annotationType())) {
+                            validatable.add(annotation);
+                        }
+                    }
+                    if (!validatable.isEmpty()) {
+                        field.setAccessible(true);
+                        infos.add(new FieldValidationInfo(field, Collections.unmodifiableList(validatable)));
                     }
                 }
-                if (!validatable.isEmpty()) {
-                    field.setAccessible(true);
-                    infos.add(new FieldValidationInfo(field, Collections.unmodifiableList(validatable)));
-                }
+                current = current.getSuperclass();
             }
             return Collections.unmodifiableList(infos);
         });

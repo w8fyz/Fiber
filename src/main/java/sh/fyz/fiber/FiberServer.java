@@ -46,6 +46,8 @@ import java.net.InetAddress;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class FiberServer {
 
@@ -78,6 +80,7 @@ public class FiberServer {
     private long maxRequestSize = 100_000_000;
     private int fileSizeThreshold = 1_000_000;
     private boolean started = false;
+    private final ScheduledExecutorService sharedExecutor;
 
     public FiberConfig getConfig() {
         return config;
@@ -88,9 +91,13 @@ public class FiberServer {
     }
 
     public FiberServer(int port, boolean enableDocumentation) {
-        instance = this;
         this.config = new FiberConfig();
         this.port = port;
+        this.sharedExecutor = Executors.newScheduledThreadPool(2, r -> {
+            Thread t = Thread.ofVirtual().name("fiber-shared-").unstarted(r);
+            t.setDaemon(true);
+            return t;
+        });
 
         // P-08/P-09: Configure Jetty with virtual threads (Java 21)
         QueuedThreadPool threadPool = new QueuedThreadPool();
@@ -120,6 +127,11 @@ public class FiberServer {
         context.addFilter(SecurityHeadersFilter.class, "/*", null);
 
         if (enableDocumentation) enableDocumentation();
+
+        // Publish the fully-initialised instance last to avoid races where
+        // FiberServer.get() is called from one of the components above before
+        // its dependencies are wired.
+        instance = this;
     }
 
     public void enableDevelopmentMode() {
@@ -330,7 +342,10 @@ public class FiberServer {
                             "Security features (Secure cookies, strict SameSite) are relaxed. " +
                             "Do NOT use enableDevelopmentMode() in production.");
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // Hostname resolution failure is not actionable here — the warning above
+                // is purely informational and only emitted when bind != loopback.
+            }
         }
 
         ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry));
@@ -342,6 +357,10 @@ public class FiberServer {
         );
         context.addServlet(holder, "/*");
         context.setErrorHandler(new FiberErrorHandler());
+
+        // Freeze role registrations so subsequent calls fail fast.
+        roleRegistry.freeze();
+
         started = true;
         server.start();
     }
@@ -349,6 +368,19 @@ public class FiberServer {
     public void stop() throws Exception {
         server.stop();
         FileUploadManager.getInstance().shutdown();
+        if (oauthClientService != null) {
+            oauthClientService.shutdown();
+        }
+        sharedExecutor.shutdown();
+        try {
+            if (!sharedExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                logger.warn("[Fiber] Shared executor did not terminate within 10s — forcing shutdown");
+                sharedExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            sharedExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         started = false;
     }
 
@@ -393,5 +425,15 @@ public class FiberServer {
     public FiberServer setFileSizeThreshold(int fileSizeThreshold) {
         this.fileSizeThreshold = fileSizeThreshold;
         return this;
+    }
+
+    /**
+     * Shared {@link ScheduledExecutorService} backed by virtual threads. Components that
+     * need background scheduling (session expiration, OAuth code cleanup, upload purge)
+     * should reuse this executor rather than spawning their own pools so that
+     * {@link #stop()} can deterministically reclaim them.
+     */
+    public ScheduledExecutorService getSharedExecutor() {
+        return sharedExecutor;
     }
 }

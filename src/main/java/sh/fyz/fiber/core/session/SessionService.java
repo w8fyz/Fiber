@@ -7,6 +7,8 @@ import sh.fyz.architect.repositories.GenericRepository;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.util.HttpUtil;
 
+import sh.fyz.fiber.FiberServer;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -30,11 +32,21 @@ public class SessionService {
                 .expireAfterWrite(Duration.ofSeconds(30))
                 .build();
 
-        this.cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "fiber-session-cleanup");
-            t.setDaemon(true);
-            return t;
-        });
+        ScheduledExecutorService shared = null;
+        try {
+            shared = FiberServer.get().getSharedExecutor();
+        } catch (Exception ignored) {
+            // FiberServer not initialised — fall back to a private virtual-thread executor.
+        }
+        if (shared != null) {
+            this.cleanupExecutor = shared;
+        } else {
+            this.cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = Thread.ofVirtual().name("fiber-session-cleanup-").unstarted(r);
+                t.setDaemon(true);
+                return t;
+            });
+        }
         this.cleanupExecutor.scheduleAtFixedRate(this::cleanupExpired, 1, 1, TimeUnit.HOURS);
     }
 
@@ -52,14 +64,14 @@ public class SessionService {
     }
 
     public FiberSession getSession(String sessionId) {
-        if (sessionId == null) return null;
-        Optional<FiberSession> cached = sessionCache.get(sessionId, k -> {
-            FiberSession s = repository.findById(k);
-            return Optional.ofNullable(s);
-        });
-        if (cached == null || cached.isEmpty()) return null;
+        if (sessionId == null || sessionId.isBlank()) return null;
+        Optional<FiberSession> cached = sessionCache.get(sessionId,
+                k -> Optional.ofNullable(repository.findById(k)));
+        if (cached == null || cached.isEmpty()) {
+            return null;
+        }
         FiberSession session = cached.get();
-        if (!session.isValid()) {
+        if (session == null || !session.isValid()) {
             sessionCache.invalidate(sessionId);
             return null;
         }
@@ -103,7 +115,7 @@ public class SessionService {
                 .where("active", true)
                 .findAll();
         for (FiberSession session : sessions) {
-            if (!session.getSessionId().equals(currentSessionId)) {
+            if (!java.util.Objects.equals(session.getSessionId(), currentSessionId)) {
                 session.setActive(false);
                 repository.save(session);
                 sessionCache.invalidate(session.getSessionId());

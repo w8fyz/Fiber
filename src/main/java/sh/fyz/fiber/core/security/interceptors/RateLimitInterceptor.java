@@ -8,6 +8,7 @@ import sh.fyz.fiber.core.security.exceptions.RateLimitExceededException;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.Deque;
+import java.util.Locale;
 import java.util.concurrent.*;
 
 public class RateLimitInterceptor {
@@ -100,10 +101,13 @@ public class RateLimitInterceptor {
     }
 
     public static String buildCacheKey(String identifier, Method method, RateLimit rateLimit) {
+        // Lowercase the identifier so that "Bob" and "bob" share the same bucket — without
+        // this an attacker can multiply the number of allowed attempts by varying case.
+        String normalized = identifier == null ? "" : identifier.toLowerCase(Locale.ROOT);
         String bucket = rateLimit.key().isEmpty()
                 ? method.getDeclaringClass().getName() + ":" + method.getName()
                 : rateLimit.key();
-        return identifier + ":" + bucket;
+        return normalized + ":" + bucket;
     }
 
     public static long checkRateLimit(String identifier, Method method) {

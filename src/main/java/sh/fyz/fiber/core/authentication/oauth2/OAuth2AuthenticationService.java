@@ -37,11 +37,20 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         this.userRepository = userRepository;
         this.providers = new ConcurrentHashMap<>();
         this.stateStore = new ConcurrentHashMap<>();
-        this.stateCleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "oauth2-state-cleanup");
-            t.setDaemon(true);
-            return t;
-        });
+        ScheduledExecutorService shared = null;
+        try {
+            shared = sh.fyz.fiber.FiberServer.get().getSharedExecutor();
+        } catch (Exception ignored) {
+        }
+        if (shared != null) {
+            this.stateCleanupExecutor = shared;
+        } else {
+            this.stateCleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = Thread.ofVirtual().name("oauth2-state-cleanup-").unstarted(r);
+                t.setDaemon(true);
+                return t;
+            });
+        }
         this.stateCleanupExecutor.scheduleAtFixedRate(
                 () -> {
                     long now = System.currentTimeMillis();

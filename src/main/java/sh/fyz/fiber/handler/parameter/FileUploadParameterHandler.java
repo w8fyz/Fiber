@@ -8,11 +8,15 @@ import sh.fyz.fiber.core.upload.FileUploadManager;
 import sh.fyz.fiber.core.upload.UploadedFile;
 
 import java.lang.reflect.Parameter;
-import java.util.Arrays;
 import java.util.regex.Matcher;
 
 /**
- * Handler pour les paramètres annotés avec @FileUpload.
+ * Handler for {@code @FileUpload}-annotated parameters.
+ *
+ * <p>Performs strict pre-condition checks (Content-Type present, chunk parameters parse,
+ * Part present) and maps all failures to a clear {@link IllegalArgumentException} — the
+ * {@code ParameterResolver} then turns the exception into a 400 response instead of
+ * propagating a 500 NPE.</p>
  */
 public class FileUploadParameterHandler implements ParameterHandler {
     @Override
@@ -22,7 +26,8 @@ public class FileUploadParameterHandler implements ParameterHandler {
 
     @Override
     public Object handle(Parameter parameter, HttpServletRequest request, HttpServletResponse response, Matcher pathMatcher) throws Exception {
-        if (!request.getContentType().startsWith("multipart/form-data")) {
+        String contentType = request.getContentType();
+        if (contentType == null || !contentType.startsWith("multipart/form-data")) {
             throw new IllegalArgumentException("Le contenu doit être multipart/form-data");
         }
 
@@ -31,10 +36,9 @@ public class FileUploadParameterHandler implements ParameterHandler {
         String chunkIndexStr = request.getParameter("chunkIndex");
         String totalChunksStr = request.getParameter("totalChunks");
 
-        // Si on a déjà un uploadId, c'est un chunk d'un fichier existant
         if (uploadId != null && chunkIndexStr != null && totalChunksStr != null) {
-            int chunkIndex = Integer.parseInt(chunkIndexStr);
-            int totalChunks = Integer.parseInt(totalChunksStr);
+            int chunkIndex = parseIntParam(chunkIndexStr, "chunkIndex");
+            int totalChunks = parseIntParam(totalChunksStr, "totalChunks");
 
             UploadedFile existingFile = FileUploadManager.getInstance().getUpload(uploadId);
             if (existingFile == null) {
@@ -44,11 +48,9 @@ public class FileUploadParameterHandler implements ParameterHandler {
             Part filePart = request.getPart(parameter.getName());
             validateFilePart(filePart, annotation);
 
-            existingFile.addChunk(filePart, chunkIndex);
+            existingFile.addChunk(filePart, chunkIndex, totalChunks);
             return existingFile;
-        }
-        // Sinon, c'est un nouveau fichier
-        else {
+        } else {
             Part filePart = request.getPart(parameter.getName());
             validateFilePart(filePart, annotation);
 
@@ -60,6 +62,14 @@ public class FileUploadParameterHandler implements ParameterHandler {
             UploadedFile file = new UploadedFile(filePart, uploadId, totalChunks);
             FileUploadManager.getInstance().registerUpload(file);
             return file;
+        }
+    }
+
+    private static int parseIntParam(String value, String name) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid '" + name + "' parameter: must be an integer");
         }
     }
 
@@ -91,4 +101,4 @@ public class FileUploadParameterHandler implements ParameterHandler {
         }
         return false;
     }
-} 
+}

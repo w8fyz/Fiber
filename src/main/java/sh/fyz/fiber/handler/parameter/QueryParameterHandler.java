@@ -25,9 +25,21 @@ public class QueryParameterHandler implements ParameterHandler {
             throw new IllegalArgumentException("Required parameter '" + param.value() + "' is missing");
         }
 
-        Object convertedValue = TypeConverter.convert(value, parameter.getType());
-        ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
+        Object convertedValue;
+        try {
+            convertedValue = TypeConverter.convert(value, parameter.getType());
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException(
+                    "Invalid value for parameter '" + param.value() + "': " + e.getMessage(), e);
+        }
 
+        if (convertedValue == null && param.required()) {
+            throw new IllegalArgumentException(
+                    "Required parameter '" + param.value() + "' could not be converted to "
+                            + parameter.getType().getSimpleName());
+        }
+
+        ValidationResult result = ValidationRegistry.validateParameter(parameter, convertedValue);
         if (!result.isValid()) {
             throw new IllegalArgumentException(result.getFirstError());
         }

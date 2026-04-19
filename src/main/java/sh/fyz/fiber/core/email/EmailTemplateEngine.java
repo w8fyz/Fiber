@@ -1,5 +1,7 @@
 package sh.fyz.fiber.core.email;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sh.fyz.fiber.annotations.email.MailColumn;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 
@@ -12,6 +14,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class EmailTemplateEngine {
+
+    private static final Logger logger = LoggerFactory.getLogger(EmailTemplateEngine.class);
+
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{([a-zA-Z0-9_]+)\\}");
     private static final Pattern IMPORT_PATTERN = Pattern.compile("@import=\"([^\"]+)\"\\s*@");
     
@@ -59,9 +64,9 @@ public class EmailTemplateEngine {
                 importedContent = processImports(importedContent);
                 matcher.appendReplacement(result, Matcher.quoteReplacement(importedContent));
             } catch (IOException e) {
-                e.printStackTrace();
-                // En cas d'erreur, on laisse la directive d'import en place
-                matcher.appendReplacement(result, matcher.group(0));
+                logger.error("Failed to import email template fragment '{}'", importPath, e);
+                // Leave the import directive in place so the failure is visible.
+                matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group(0)));
             }
         }
         matcher.appendTail(result);
