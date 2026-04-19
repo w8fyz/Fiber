@@ -156,6 +156,14 @@ public class CorsService {
 
     public void configureCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
         String origin = request.getHeader("Origin");
+
+        // Same-origin requests do not carry an Origin header — CORS does not apply, leave
+        // the response alone (no Access-Control-* headers, no 403). The browser would have
+        // already enforced same-origin policy at this point.
+        if (origin == null || origin.isBlank()) {
+            return;
+        }
+
         if (!isOriginAllowed(origin)) {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
@@ -166,11 +174,6 @@ public class CorsService {
         if (allowCredentials) {
             // Reflecting the request Origin with credentials is only safe when the origin
             // is an exact (non-wildcard) match. Wildcard matches are refused in production.
-            if (origin == null) {
-                // null origin only in dev — no Access-Control-Allow-Origin header.
-                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                return;
-            }
             if (!isExactOrigin(origin) && !dev) {
                 logger.warn("[CORS] Refusing to reflect wildcard-matched origin '{}' with credentials in production", origin);
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
