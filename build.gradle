@@ -1,6 +1,5 @@
 plugins {
     id 'java-library'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'me.champeau.jmh' version '0.7.2'
     id "com.vanniktech.maven.publish" version "0.36.0"
 }
@@ -102,13 +101,4 @@ jmh {
     iterations = 5
     fork = 1
     benchmarkMode = ['thrpt']
-}
-
-shadowJar {
-    archiveClassifier.set('all')
-    mergeServiceFiles()
-
-    relocate 'com.fasterxml.jackson', 'sh.fyz.fiber.shaded.jackson'
-    relocate 'org.eclipse.jetty', 'sh.fyz.fiber.shaded.jetty'
-    relocate 'io.jsonwebtoken', 'sh.fyz.fiber.shaded.jjwt'
 }
