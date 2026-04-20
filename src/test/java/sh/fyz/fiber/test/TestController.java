@@ -151,6 +151,11 @@ public class TestController {
         return Map.of("csrf", "bypassed");
     }
 
+    @RequestMapping(value = "/csrf-protected", method = RequestMapping.Method.POST)
+    public Map<String, String> csrfProtected() {
+        return Map.of("csrf", "validated");
+    }
+
     @RequestMapping(value = "/middleware-value", method = RequestMapping.Method.GET)
     public Map<String, Object> middlewareValue(HttpServletRequest request) {
         Object val = request.getAttribute("test-middleware");

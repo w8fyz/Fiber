@@ -16,6 +16,7 @@ public class TestMiddleware implements Middleware {
     @Override
     public boolean handle(HttpServletRequest request, HttpServletResponse response) throws IOException {
         request.setAttribute("test-middleware", "hello-from-middleware");
+        response.setHeader("X-Test-Middleware-Ran", "true");
         return true;
     }
 }
