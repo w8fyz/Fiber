@@ -17,10 +17,8 @@ import sh.fyz.fiber.middleware.Middleware;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -35,7 +33,7 @@ public class EndpointHandler {
 
     private final boolean noCors;
     private final SecurityPipeline securityPipeline;
-    private final List<Middleware> sortedMiddleware;
+    private final List<Middleware> globalMiddleware;
 
     public EndpointHandler(Object controller, Method method, List<Middleware> globalMiddleware, String[] requiredRoles) {
         this.controller = controller;
@@ -55,9 +53,7 @@ public class EndpointHandler {
         Set<AuthScheme> acceptedAuthSchemes = computeAcceptedAuthSchemes(method);
         this.securityPipeline = new SecurityPipeline(method, noCsrf, basicAuth, acceptedAuthSchemes);
 
-        List<Middleware> sorted = new ArrayList<>(globalMiddleware);
-        sorted.sort(Comparator.comparingInt(Middleware::priority));
-        this.sortedMiddleware = Collections.unmodifiableList(sorted);
+        this.globalMiddleware = globalMiddleware;
 
         RequestMapping mapping = method.getAnnotation(RequestMapping.class);
         Controller controllerAnnotation = method.getDeclaringClass().getAnnotation(Controller.class);
@@ -115,7 +111,7 @@ public class EndpointHandler {
             return null;
         }
 
-        for (Middleware middleware : sortedMiddleware) {
+        for (Middleware middleware : globalMiddleware) {
             if (!middleware.handle(req, resp)) {
                 return null;
             }

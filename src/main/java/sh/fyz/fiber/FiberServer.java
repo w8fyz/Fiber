@@ -282,11 +282,30 @@ public class FiberServer {
 
     public void addMiddleware(Middleware middleware) {
         globalMiddleware.add(middleware);
+        globalMiddleware.sort(Comparator.comparingInt(Middleware::priority));
     }
 
     public void enableCSRFProtection() {
         this.csrfMiddleware = new CsrfMiddleware();
+        getCorsService().addExposedHeader("X-CSRF-TOKEN");
+        ensureCsrfHeaderAllowed();
         registerController(new CsrfController());
+    }
+
+    private void ensureCsrfHeaderAllowed() {
+        CorsService cors = getCorsService();
+        List<String> current = new ArrayList<>(cors.getAllowedHeaders());
+        boolean found = false;
+        for (String h : current) {
+            if ("X-CSRF-TOKEN".equalsIgnoreCase(h)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            current.add("X-CSRF-TOKEN");
+            cors.setAllowedHeaders(current);
+        }
     }
 
     private void enableDocumentation() {

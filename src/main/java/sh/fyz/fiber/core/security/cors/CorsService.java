@@ -29,6 +29,7 @@ public class CorsService {
     private boolean allowNullOrigin = false;
     private List<String> allowedMethods = Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS");
     private List<String> allowedHeaders = Arrays.asList("Content-Type", "Authorization");
+    private List<String> exposedHeaders = new ArrayList<>();
     private boolean allowCredentials = true;
     private long maxAge = 3600;
 
@@ -63,6 +64,28 @@ public class CorsService {
     public CorsService setAllowedHeaders(List<String> headers) {
         this.allowedHeaders = new ArrayList<>(headers);
         return this;
+    }
+
+    public List<String> getAllowedHeaders() {
+        return allowedHeaders;
+    }
+
+    public CorsService setExposedHeaders(List<String> headers) {
+        this.exposedHeaders = new ArrayList<>(headers);
+        return this;
+    }
+
+    public CorsService addExposedHeader(String header) {
+        if (header == null || header.isBlank()) return this;
+        for (String existing : exposedHeaders) {
+            if (existing.equalsIgnoreCase(header)) return this;
+        }
+        this.exposedHeaders.add(header);
+        return this;
+    }
+
+    public List<String> getExposedHeaders() {
+        return exposedHeaders;
     }
 
     public CorsService setAllowCredentials(boolean allowCredentials) {
@@ -188,6 +211,9 @@ public class CorsService {
 
         response.setHeader("Access-Control-Allow-Methods", String.join(", ", allowedMethods));
         response.setHeader("Access-Control-Allow-Headers", String.join(", ", allowedHeaders));
+        if (exposedHeaders != null && !exposedHeaders.isEmpty()) {
+            response.setHeader("Access-Control-Expose-Headers", String.join(", ", exposedHeaders));
+        }
         response.setHeader("Access-Control-Max-Age", String.valueOf(maxAge));
         response.addHeader("Vary", "Origin");
     }
