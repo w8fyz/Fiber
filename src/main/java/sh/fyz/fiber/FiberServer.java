@@ -10,6 +10,7 @@ import sh.fyz.fiber.config.FiberConfig;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.EndpointRegistry;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ClientService;
+import sh.fyz.fiber.core.authentication.oauth2.UserOAuth2TokenService;
 import sh.fyz.fiber.core.challenge.Challenge;
 import sh.fyz.fiber.core.challenge.ChallengeCallback;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
@@ -75,6 +76,7 @@ public class FiberServer {
     private CorsService corsService;
     private final BasicAuthenticator basicAuthenticator;
     private SessionService sessionService;
+    private UserOAuth2TokenService userOAuth2TokenService;
     private boolean challengeControllerRegistered = false;
     private long maxFileSize = 50_000_000;
     private long maxRequestSize = 100_000_000;
@@ -429,6 +431,14 @@ public class FiberServer {
 
     public SessionService getSessionService() {
         return sessionService;
+    }
+
+    public void setUserOAuth2TokenService(UserOAuth2TokenService userOAuth2TokenService) {
+        this.userOAuth2TokenService = userOAuth2TokenService;
+    }
+
+    public UserOAuth2TokenService getUserOAuth2TokenService() {
+        return userOAuth2TokenService;
     }
 
     public FiberServer setMaxFileSize(long maxFileSize) {

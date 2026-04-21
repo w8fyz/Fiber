@@ -64,13 +64,16 @@ src/main/java/sh/fyz/fiber/
 │   │   │   ├── CookieAuthenticator.java        # access_token cookie
 │   │   │   └── SessionValidator.java           # Shared session validation (extracted from Cookie/Bearer)
 │   │   └── oauth2/
-│   │       ├── OAuth2Provider.java             # Interface: getProviderId, getAuthorizationUrl, processCallback, mapUserData
-│   │       ├── AbstractOAuth2Provider.java     # Base impl: code exchange, userInfo fetch, URL building, SSRF protection
-│   │       ├── OAuth2AuthenticationService.java # Abstract: state store, provider registry, handleCallback
+│   │       ├── OAuth2Provider.java             # Interface: getProviderId, getAuthorizationUrl, processCallback, refreshAccessToken, mapUserData
+│   │       ├── AbstractOAuth2Provider.java     # Base impl: code exchange + refresh, userInfo fetch, URL building, SSRF protection
+│   │       ├── OAuth2AuthenticationService.java # Abstract: state store, provider registry, handleCallback, cookie short-circuit
+│   │       ├── OAuth2CallbackResult.java       # Record: userInfo + tokens returned from provider callback
 │   │       ├── OAuth2ApplicationInfo.java      # Record: clientId + clientSecret (for server-side OAuth2)
 │   │       ├── OAuth2ApplicationAuthenticator.java # Interface for Basic auth → OAuth2ApplicationInfo
 │   │       ├── OAuth2ClientService.java        # Client registration, auth codes, token generation
 │   │       ├── OAuth2TokenResponse.java        # Token response DTO
+│   │       ├── UserOAuth2TokenService.java     # Per-user provider token persistence + refresh orchestration
+│   │       ├── entities/UserOAuth2Token.java   # JPA entity: encrypted per-(userId, providerId) tokens
 │   │       ├── impl/DiscordOAuth2Provider.java # Built-in Discord provider
 │   │       └── client/controller/OAuth2ClientController.java # GET /oauth/client/authorize, POST /oauth/client/token
 │   ├── challenge/
@@ -134,6 +137,7 @@ src/main/java/sh/fyz/fiber/
 │   ├── HttpUtil.java                           # Trusted-proxy-aware IP resolution
 │   ├── JsonUtil.java                           # toJson / fromJson helpers
 │   ├── RandomUtil.java
+│   ├── TokenCrypto.java                        # AES-GCM envelope for stored OAuth2 tokens (HKDF from JWT secret)
 │   └── TypeConverter.java                      # Shared String→primitive conversion
 └── validation/
     ├── Email.java, Min.java, NotBlank.java, NotNull.java  # Annotations
@@ -155,6 +159,7 @@ Key configuration methods (call before `start()`):
 - `setAuthService(AuthenticationService<?>)` — JWT auth
 - `setSessionService(SessionService)` — server-side sessions (optional)
 - `setOAuthService(OAuth2AuthenticationService<?>)` — OAuth2 provider auth
+- `setUserOAuth2TokenService(UserOAuth2TokenService)` — per-user provider token persistence (optional)
 - `setOauthClientService(OAuth2ClientService)` — OAuth2 client credentials
 - `setCorsService(CorsService)` — CORS policy
 - `enableCSRFProtection()` — enables CSRF middleware + token endpoint
@@ -406,7 +411,12 @@ Allows users to authenticate via external providers (Discord, Google, etc.).
 **Setup:**
 
 ```java
-OAuth2AuthenticationService<User> oauthService = new MyOAuth2Service(authService, userRepo);
+// Optional: persist provider tokens so repeat logins skip /oauth2/token calls
+GenericRepository<UserOAuth2Token> tokenRepo = new GenericRepository<>(UserOAuth2Token.class);
+UserOAuth2TokenService tokenService = new UserOAuth2TokenService(tokenRepo);
+server.setUserOAuth2TokenService(tokenService);
+
+OAuth2AuthenticationService<User> oauthService = new MyOAuth2Service(authService, userRepo, tokenService);
 oauthService.registerProvider(new DiscordOAuth2Provider<>("clientId", "secret"));
 server.setOAuthService(oauthService);
 ```
@@ -417,22 +427,43 @@ server.setOAuthService(oauthService);
 
 ```java
 public class MyOAuth2Service extends OAuth2AuthenticationService<User> {
-    public MyOAuth2Service(AuthenticationService<User> authService, GenericRepository<User> repo) {
-        super(authService, repo);
+    public MyOAuth2Service(AuthenticationService<User> authService,
+                           GenericRepository<User> repo,
+                           UserOAuth2TokenService tokenService) {
+        super(authService, repo, tokenService);
     }
 
     @Override
     protected ResponseContext<User> findOrCreateUser(Map<String, Object> userInfo, OAuth2Provider<User> provider) {
         String externalId = (String) userInfo.get(provider.getIdField());
         User existing = userRepo.query().where("discordId", externalId).findFirst();
-        if (existing != null) return new ResponseContext<>(existing);
+        if (existing != null) return new ResponseContext<>(existing, null, null);
         User newUser = new User();
         provider.mapUserData(userInfo, newUser);
         userRepo.save(newUser);
-        return new ResponseContext<>(newUser);
+        return new ResponseContext<>(newUser, null, null);
     }
 }
 ```
+
+**Token persistence & rate-limit hygiene**
+
+Providers like Discord rate-limit the `/oauth2/token` endpoint hard. To avoid exhausting the app's quota:
+
+- `handleCallback` short-circuits when the request already carries valid Fiber credentials (cookie / bearer) — no provider round-trip at all for repeat logins.
+- When `UserOAuth2TokenService` is wired, the full token response (access + refresh + expiry) is stored per `(userId, providerId)`. Access and refresh tokens are encrypted at rest with AES-GCM (key derived from the JWT secret via HKDF — no extra configuration).
+- `oauthService.getValidAccessToken(user, "discord")` returns the stored access token, silently invoking the provider's refresh endpoint if expired. Use this for any outbound call you make against the provider after login — it will not re-trigger the authorization code flow.
+- Add a per-user rate limit to your OAuth callback controller:
+
+```java
+@RateLimit(attempts = 5, timeout = 1, unit = TimeUnit.MINUTES)
+@RequestMapping(value = "/oauth/callback", method = RequestMapping.Method.GET)
+public ResponseEntity<?> callback(...) { ... }
+```
+
+`DiscordOAuth2Provider` no longer forces `prompt=consent`; pass the 4-arg constructor with `forceConsent=true` only if you explicitly need the consent screen.
+
+**Breaking change in 2.3.0**: `OAuth2Provider.processCallback` returns `OAuth2CallbackResult` (not `Map<String, Object>`). Custom providers extending `AbstractOAuth2Provider` get the new behavior for free; direct implementers of `OAuth2Provider` must update their signature.
 
 ### OAuth2 — Client Credentials (Server)
 

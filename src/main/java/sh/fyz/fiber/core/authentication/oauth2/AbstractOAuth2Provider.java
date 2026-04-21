@@ -153,46 +153,93 @@ public abstract class AbstractOAuth2Provider<T extends UserAuth> implements OAut
     }
 
     @Override
-    public Map<String, Object> processCallback(String code, String redirectUri) {
+    public OAuth2CallbackResult processCallback(String code, String redirectUri) {
         try {
-            String accessToken = exchangeCodeForToken(code, redirectUri);
-            return getUserInfoFromToken(accessToken);
+            OAuth2TokenResponse tokens = exchangeCodeForToken(code, redirectUri);
+            Map<String, Object> userInfo = getUserInfoFromToken(tokens.getAccessToken());
+            return new OAuth2CallbackResult(userInfo, tokens);
         } catch (Exception e) {
             throw new RuntimeException("Failed to process OAuth callback", e);
         }
     }
 
-    @Override
-    public void useAccessToken(String accessToken, T user) {
-    }
-
-    protected String exchangeCodeForToken(String code, String redirectUri) {
+    protected OAuth2TokenResponse exchangeCodeForToken(String code, String redirectUri) {
         revalidateEndpointAtRequest(tokenEndpoint, "tokenEndpoint");
         try {
-            String credentials = Base64.getEncoder().encodeToString(
-                (clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
-
             String requestBody = String.format("grant_type=authorization_code&code=%s&redirect_uri=%s",
                 URLEncoder.encode(code, StandardCharsets.UTF_8),
                 URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(tokenEndpoint))
-                .header("Authorization", "Basic " + credentials)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .timeout(HTTP_TIMEOUT)
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() != 200) {
-                throw new RuntimeException("Failed to exchange code for token: " + response.body());
-            }
-
-            Map<String, String> tokenData = parseJsonResponse(response.body());
-            return tokenData.get("access_token");
+            return postTokenRequest(requestBody);
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to exchange code for token", e);
+        }
+    }
+
+    @Override
+    public OAuth2TokenResponse refreshAccessToken(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return null;
+        }
+        revalidateEndpointAtRequest(tokenEndpoint, "tokenEndpoint");
+        try {
+            String requestBody = String.format("grant_type=refresh_token&refresh_token=%s",
+                URLEncoder.encode(refreshToken, StandardCharsets.UTF_8));
+            return postTokenRequest(requestBody);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to refresh access token", e);
+        }
+    }
+
+    /** Shared POST against the token endpoint used by code exchange and refresh. */
+    private OAuth2TokenResponse postTokenRequest(String requestBody) throws Exception {
+        String credentials = Base64.getEncoder().encodeToString(
+            (clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(tokenEndpoint))
+            .header("Authorization", "Basic " + credentials)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Accept", "application/json")
+            .timeout(HTTP_TIMEOUT)
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Token endpoint error (" + response.statusCode() + "): " + response.body());
+        }
+
+        Map<String, Object> data = parseJsonResponseToMap(response.body());
+        return toTokenResponse(data);
+    }
+
+    private static OAuth2TokenResponse toTokenResponse(Map<String, Object> data) {
+        String accessToken = stringField(data, "access_token");
+        String tokenType = stringField(data, "token_type");
+        String refresh = stringField(data, "refresh_token");
+        String scope = stringField(data, "scope");
+        Long expiresIn = longField(data, "expires_in");
+        return new OAuth2TokenResponse(accessToken, tokenType, expiresIn, refresh, scope);
+    }
+
+    private static String stringField(Map<String, Object> data, String key) {
+        Object v = data.get(key);
+        return v == null ? null : v.toString();
+    }
+
+    private static Long longField(Map<String, Object> data, String key) {
+        Object v = data.get(key);
+        if (v == null) return null;
+        if (v instanceof Number n) return n.longValue();
+        try {
+            return Long.parseLong(v.toString());
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

@@ -8,6 +8,7 @@ import sh.fyz.architect.repositories.GenericRepository;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import java.util.EnumSet;
 import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
 import sh.fyz.fiber.core.session.FiberSession;
 import sh.fyz.fiber.core.session.SessionContext;
@@ -120,6 +121,29 @@ public abstract class AuthenticationService<T extends UserAuth> {
         String ipAddress = HttpUtil.getClientIpAddress(request);
         String userAgent = request.getHeader("User-Agent");
         return JwtUtil.validateToken(token, ipAddress, userAgent) != null;
+    }
+
+    /**
+     * Resolve the currently authenticated user from the incoming request
+     * without throwing. Runs every registered {@link Authenticator}
+     * (Cookie + Bearer by default). Used by OAuth2 callback short-circuit:
+     * if a user is already authenticated via existing Fiber cookies, the
+     * callback can skip re-running the provider's code-for-token exchange.
+     *
+     * @return the authenticated user, or {@code null} if no valid credential.
+     */
+    @SuppressWarnings("unchecked")
+    public T resolveFromRequest(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        try {
+            UserAuth user = FiberServer.get().getAuthResolver()
+                    .resolveUser(request, EnumSet.of(AuthScheme.COOKIE, AuthScheme.BEARER));
+            return (T) user;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public void setAuthCookies(UserAuth user, HttpServletRequest request, HttpServletResponse response) {
