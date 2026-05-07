@@ -7,8 +7,8 @@ import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.util.JsonUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  * audit-heavy endpoint does not spawn thousands of ad-hoc threads.</p>
  */
 public class AuditLogProcessor {
-    private static final Logger logger = LoggerFactory.getLogger(AuditLogProcessor.class);
+    private static final FiberLogger logger = FiberLog.get(AuditLogProcessor.class);
 
     public static final String RAW_BODY_ATTRIBUTE = "fiber.rawBody";
 
@@ -49,7 +49,8 @@ public class AuditLogProcessor {
             if (server != null && server.getSharedExecutor() != null) {
                 return server.getSharedExecutor();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            FiberLog.handleSilent(e);
         }
         return fallbackExecutor;
     }

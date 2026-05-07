@@ -2,8 +2,8 @@ package sh.fyz.fiber.middleware.impl;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.security.cors.CorsService;
@@ -36,7 +36,7 @@ import java.util.Set;
  */
 public class CsrfMiddleware implements Middleware {
 
-    private static final Logger logger = LoggerFactory.getLogger(CsrfMiddleware.class);
+    private static final FiberLogger logger = FiberLog.get(CsrfMiddleware.class);
 
     private static final String CSRF_HEADER = "X-CSRF-TOKEN";
     private static final String CSRF_COOKIE = "XSRF-TOKEN";

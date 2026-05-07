@@ -1,7 +1,7 @@
 package sh.fyz.fiber.core.email;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.annotations.email.MailColumn;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 
@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 
 public class EmailTemplateEngine {
 
-    private static final Logger logger = LoggerFactory.getLogger(EmailTemplateEngine.class);
+    private static final FiberLogger logger = FiberLog.get(EmailTemplateEngine.class);
 
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{([a-zA-Z0-9_]+)\\}");
     private static final Pattern IMPORT_PATTERN = Pattern.compile("@import=\"([^\"]+)\"\\s*@");

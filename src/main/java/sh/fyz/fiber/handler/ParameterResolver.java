@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.annotations.params.AuthenticatedUser;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.handler.parameter.ParameterHandler;
 import sh.fyz.fiber.handler.parameter.ParameterHandlerRegistry;
 
@@ -37,6 +38,7 @@ public class ParameterResolver {
             } catch (IllegalArgumentException e) {
                 throw new ResolveException(e.getMessage(), HttpServletResponse.SC_BAD_REQUEST);
             } catch (Exception e) {
+                FiberLog.handle(e, "param resolution failed for {}", parameter.getName());
                 throw new ResolveException("Internal server error", HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             }
         }

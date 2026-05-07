@@ -45,7 +45,8 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         ScheduledExecutorService shared = null;
         try {
             shared = sh.fyz.fiber.FiberServer.get().getSharedExecutor();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            sh.fyz.fiber.core.log.FiberLog.handleSilent(e);
         }
         if (shared != null) {
             this.stateCleanupExecutor = shared;

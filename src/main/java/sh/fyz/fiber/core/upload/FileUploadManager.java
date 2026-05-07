@@ -1,5 +1,7 @@
 package sh.fyz.fiber.core.upload;
 
+import sh.fyz.fiber.core.log.FiberLog;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -50,7 +52,7 @@ public class FileUploadManager {
             try {
                 file.cleanup();
             } catch (Exception e) {
-                // Ignorer les erreurs de nettoyage
+                FiberLog.handleSilent(e);
             }
         }
     }
@@ -80,7 +82,8 @@ public class FileUploadManager {
             if (shouldRemove) {
                 try {
                     file.cleanup();
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    FiberLog.handleSilent(e);
                 }
             }
             return shouldRemove;
@@ -96,7 +99,7 @@ public class FileUploadManager {
             try {
                 file.cleanup();
             } catch (Exception e) {
-                // Ignorer les erreurs de nettoyage
+                FiberLog.handleSilent(e);
             }
         });
         uploads.clear();

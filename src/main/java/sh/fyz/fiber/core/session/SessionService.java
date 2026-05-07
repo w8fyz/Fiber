@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
 import sh.fyz.architect.repositories.GenericRepository;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.util.HttpUtil;
 
 import sh.fyz.fiber.FiberServer;
@@ -35,8 +36,8 @@ public class SessionService {
         ScheduledExecutorService shared = null;
         try {
             shared = FiberServer.get().getSharedExecutor();
-        } catch (Exception ignored) {
-            // FiberServer not initialised — fall back to a private virtual-thread executor.
+        } catch (Exception e) {
+            FiberLog.handleSilent(e);
         }
         if (shared != null) {
             this.cleanupExecutor = shared;

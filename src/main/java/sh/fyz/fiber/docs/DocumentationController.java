@@ -2,8 +2,8 @@ package sh.fyz.fiber.docs;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
@@ -25,7 +25,7 @@ import java.util.Map;
 @Controller("/docs")
 public class DocumentationController {
 
-    private static final Logger logger = LoggerFactory.getLogger(DocumentationController.class);
+    private static final FiberLogger logger = FiberLog.get(DocumentationController.class);
 
     private static final String DOCS_ADMIN_ROLE = "admin";
 

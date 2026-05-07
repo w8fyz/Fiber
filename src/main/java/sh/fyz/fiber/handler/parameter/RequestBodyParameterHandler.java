@@ -3,8 +3,8 @@ package sh.fyz.fiber.handler.parameter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.annotations.params.RequestBody;
 import sh.fyz.fiber.core.security.logging.AuditLogProcessor;
 import sh.fyz.fiber.util.JsonUtil;
@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 
 public class RequestBodyParameterHandler implements ParameterHandler {
 
-    private static final Logger logger = LoggerFactory.getLogger(RequestBodyParameterHandler.class);
+    private static final FiberLogger logger = FiberLog.get(RequestBodyParameterHandler.class);
 
     @Override
     public boolean canHandle(Parameter parameter) {

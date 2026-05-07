@@ -2,8 +2,8 @@ package sh.fyz.fiber.core.challenge;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.core.ResponseEntity;
 
 import java.io.IOException;
@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ChallengeRegistry {
 
-    private static final Logger logger = LoggerFactory.getLogger(ChallengeRegistry.class);
+    private static final FiberLogger logger = FiberLog.get(ChallengeRegistry.class);
 
     private final Map<String, Challenge> activeChallenges;
 

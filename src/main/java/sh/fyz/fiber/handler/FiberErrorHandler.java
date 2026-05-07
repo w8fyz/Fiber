@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.handler.ErrorHandler;
+import sh.fyz.fiber.core.log.FiberLog;
+import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.util.FiberObjectMapper;
 
 import java.io.IOException;
@@ -13,6 +15,7 @@ import java.util.Map;
 
 public class FiberErrorHandler extends ErrorHandler {
 
+    private static final FiberLogger logger = FiberLog.get(FiberErrorHandler.class);
     private static final FiberObjectMapper MAPPER = new FiberObjectMapper();
 
     @Override
@@ -20,6 +23,7 @@ public class FiberErrorHandler extends ErrorHandler {
                        HttpServletRequest request, HttpServletResponse response)
             throws IOException {
         int status = response.getStatus();
+        logger.warn("jetty error {} {} status={}", request.getMethod(), request.getRequestURI(), status);
         response.setStatus(status);
         response.setContentType("application/json");
 

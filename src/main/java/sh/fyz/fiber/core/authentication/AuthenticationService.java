@@ -274,8 +274,8 @@ public abstract class AuthenticationService<T extends UserAuth> {
             if (FiberServer.get().getCsrfMiddleware() != null) {
                 CsrfMiddleware.rotateToken(response);
             }
-        } catch (Exception ignored) {
-            // CSRF not configured — nothing to rotate.
+        } catch (Exception e) {
+            sh.fyz.fiber.core.log.FiberLog.handleSilent(e);
         }
     }
 

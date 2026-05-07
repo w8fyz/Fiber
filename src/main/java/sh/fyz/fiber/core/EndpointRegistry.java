@@ -1,7 +1,7 @@
 package sh.fyz.fiber.core;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.annotations.security.Permission;
@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EndpointRegistry {
 
-    private static final Logger logger = LoggerFactory.getLogger(EndpointRegistry.class);
+    private static final FiberLogger logger = FiberLog.get(EndpointRegistry.class);
 
     private final Map<String, EndpointHandler> endpoints;
     private final List<Middleware> globalMiddleware;
@@ -74,7 +74,9 @@ public class EndpointRegistry {
             dynamicTrie.add(path, httpMethod.name(), handler);
         }
 
-        // Warn at registration if the endpoint is open (no role/permission/default roles).
+        logger.info("registered {} {} -> {}.{}", httpMethod, path,
+                method.getDeclaringClass().getSimpleName(), method.getName());
+
         boolean hasPermission = method.isAnnotationPresent(Permission.class);
         if ((requiredRoles == null || requiredRoles.length == 0) && !hasPermission) {
             logger.warn("[Fiber] Endpoint {} {} is registered without @RequireRole/@Permission and no defaultRoles is configured", httpMethod, path);

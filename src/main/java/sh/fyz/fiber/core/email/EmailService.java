@@ -5,8 +5,8 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 
 import java.io.IOException;
@@ -17,7 +17,7 @@ import java.util.concurrent.CompletableFuture;
 
 public class EmailService {
 
-    private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
+    private static final FiberLogger logger = FiberLog.get(EmailService.class);
 
     private final jakarta.mail.Session session;
     private final String from;

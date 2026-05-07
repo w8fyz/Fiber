@@ -1,7 +1,7 @@
 package sh.fyz.fiber.config;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.yellowconfig.Config;
 import sh.fyz.yellowconfig.ConfigField;
 
@@ -10,7 +10,7 @@ import java.util.Base64;
 
 public class FiberConfig extends Config {
 
-    private static final Logger logger = LoggerFactory.getLogger(FiberConfig.class);
+    private static final FiberLogger logger = FiberLog.get(FiberConfig.class);
 
     private static final String DEFAULT_SECRET = "your-secret-key-please-dont-use-that-in-prod";
     private static final int MIN_SECRET_LENGTH = 32;

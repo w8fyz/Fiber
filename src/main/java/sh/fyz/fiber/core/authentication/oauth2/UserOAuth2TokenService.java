@@ -2,8 +2,8 @@ package sh.fyz.fiber.core.authentication.oauth2;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.architect.repositories.GenericRepository;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.authentication.oauth2.entities.UserOAuth2Token;
@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class UserOAuth2TokenService {
 
-    private static final Logger logger = LoggerFactory.getLogger(UserOAuth2TokenService.class);
+    private static final FiberLogger logger = FiberLog.get(UserOAuth2TokenService.class);
     private static final long CLOCK_SKEW_MILLIS = 30_000L;
 
     private final GenericRepository<UserOAuth2Token> repository;
@@ -49,8 +49,8 @@ public class UserOAuth2TokenService {
         ScheduledExecutorService shared = null;
         try {
             shared = FiberServer.get().getSharedExecutor();
-        } catch (Exception ignored) {
-            // FiberServer not initialised — fall back to a private virtual-thread executor.
+        } catch (Exception e) {
+            FiberLog.handleSilent(e);
         }
         if (shared != null) {
             this.cleanupExecutor = shared;

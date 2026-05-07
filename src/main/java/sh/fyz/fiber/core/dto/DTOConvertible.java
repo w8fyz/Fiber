@@ -84,7 +84,8 @@ public abstract class DTOConvertible {
                     dto.put(field.getName(), value);
                 }
 
-            } catch (IllegalAccessException ignored) {
+            } catch (IllegalAccessException e) {
+                sh.fyz.fiber.core.log.FiberLog.handleSilent(e);
             }
         }
         return dto;

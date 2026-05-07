@@ -8,6 +8,8 @@ import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthScheme;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
+import sh.fyz.fiber.core.log.FiberLog;
+import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.core.security.processors.PermissionProcessor;
 
 import java.io.IOException;
@@ -15,6 +17,8 @@ import java.lang.reflect.Method;
 import java.util.Set;
 
 public class SecurityPipeline {
+    private static final FiberLogger logger = FiberLog.get(SecurityPipeline.class);
+
     private final Method method;
     private final boolean noCsrf;
     private final boolean needsBasicAuth;
@@ -30,6 +34,7 @@ public class SecurityPipeline {
     public SecurityResult execute(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         if (!noCsrf && FiberServer.get().getCsrfMiddleware() != null) {
             if (!FiberServer.get().getCsrfMiddleware().handle(req, resp)) {
+                logger.warn("CSRF rejected {} {}", req.getMethod(), req.getRequestURI());
                 return SecurityResult.denied();
             }
         }
@@ -38,6 +43,7 @@ public class SecurityPipeline {
         if (needsBasicAuth) {
             authenticatedApp = FiberServer.get().getBasicAuthenticator().authenticate(req);
             if (authenticatedApp == null) {
+                logger.debug("Basic auth failed for {}", req.getRequestURI());
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Invalid client credentials");
                 return SecurityResult.denied();
             }
@@ -47,6 +53,7 @@ public class SecurityPipeline {
         if (!acceptedAuthSchemes.isEmpty()) {
             authenticatedUser = FiberServer.get().getAuthResolver().resolveUser(req, acceptedAuthSchemes);
             if (authenticatedUser == null) {
+                logger.debug("auth failed schemes={} uri={}", acceptedAuthSchemes, req.getRequestURI());
                 ErrorResponse.send(resp, req.getRequestURI(), HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
                 return SecurityResult.denied();
             }

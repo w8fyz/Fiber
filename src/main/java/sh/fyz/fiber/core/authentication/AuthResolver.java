@@ -20,6 +20,7 @@ public class AuthResolver {
 
     public UserAuth resolveUser(HttpServletRequest request, Set<AuthScheme> accepted) {
         if(authenticators.isEmpty()) {
+            throw new RuntimeException("No authenticators registered");
         }
         if (accepted == null || accepted.isEmpty()) {
             return null;

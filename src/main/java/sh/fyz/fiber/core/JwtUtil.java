@@ -5,8 +5,8 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 
@@ -26,7 +26,7 @@ import java.util.function.Function;
  */
 public class JwtUtil {
 
-    private static final Logger logger = LoggerFactory.getLogger(JwtUtil.class);
+    private static final FiberLogger logger = FiberLog.get(JwtUtil.class);
 
     private static final AtomicReference<State> STATE = new AtomicReference<>();
 
@@ -124,6 +124,7 @@ public class JwtUtil {
 
             return claims;
         } catch (Exception e) {
+            FiberLog.handleSilent(e);
             return null;
         }
     }

@@ -2,8 +2,8 @@ package sh.fyz.fiber.core.security.cors;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.FiberServer;
 
 import java.util.ArrayList;
@@ -23,7 +23,7 @@ import java.util.List;
  */
 public class CorsService {
 
-    private static final Logger logger = LoggerFactory.getLogger(CorsService.class);
+    private static final FiberLogger logger = FiberLog.get(CorsService.class);
 
     private List<String> allowedOrigins = new ArrayList<>();
     private boolean allowNullOrigin = false;

@@ -1,8 +1,8 @@
 package sh.fyz.fiber.util;
 
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -21,7 +21,7 @@ import java.util.Set;
  */
 public class HttpUtil {
 
-    private static final Logger logger = LoggerFactory.getLogger(HttpUtil.class);
+    private static final FiberLogger logger = FiberLog.get(HttpUtil.class);
 
     private static volatile Set<String> trustedProxies = null;
     private static volatile boolean proxyHeadersEnabled = true;

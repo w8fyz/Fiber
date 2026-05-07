@@ -7,14 +7,14 @@ import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.ErrorResponse;
 import sh.fyz.fiber.core.JwtUtil;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 
 /**
  * Middleware for handling authentication.
  */
 public class AuthMiddleware {
-    private static final Logger logger = LoggerFactory.getLogger(AuthMiddleware.class);
+    private static final FiberLogger logger = FiberLog.get(AuthMiddleware.class);
     private static final String USER_ID_ATTRIBUTE = "userId";
 
     public static boolean process(HttpServletRequest req, HttpServletResponse resp) {

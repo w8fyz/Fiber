@@ -1,7 +1,7 @@
 package sh.fyz.fiber.core.email;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import sh.fyz.fiber.core.log.FiberLogger;
+import sh.fyz.fiber.core.log.FiberLog;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
  * Utility class for handling CSS in emails, including converting CSS to inline styles.
  */
 public class EmailCssUtils {
-    private static final Logger LOGGER = LoggerFactory.getLogger(EmailCssUtils.class);
+    private static final FiberLogger LOGGER = FiberLog.get(EmailCssUtils.class);
     
     /**
      * Converts CSS from a style tag to inline styles in the HTML content.
