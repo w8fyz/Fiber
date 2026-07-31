@@ -321,7 +321,8 @@ public class MyAuthService extends AuthenticationService<User> {
         super(repo, "/auth");  // refresh token cookie path
     }
 
-    // Override for efficient database lookup instead of loading all users
+    // Optional: narrow the lookup to a single column instead of every
+    // @IdentifierField, or add case-insensitive matching
     @Override
     public UserAuth findUserByIdentifer(String identifier) {
         return repo.query().where("email", identifier).findFirst();
@@ -331,8 +332,8 @@ public class MyAuthService extends AuthenticationService<User> {
 
 Key methods inherited:
 - `getUserById(Object id)` — load from repository (Caffeine-cached, 30s TTL)
-- `findUserByIdentifer(String identifier)` — override this for efficient DB lookup (default loads all users)
-- `findByIdentifier(String identifier)` — protected fallback that loads all users (avoid in production)
+- `findUserByIdentifer(String identifier)` — lookup by any `@IdentifierField`; override for different matching semantics
+- `findByIdentifier(String identifier)` — protected default: one `WHERE <field> = ?` query per identifier column, first hit wins
 - `validateCredentials(UserAuth user, String password)` — BCrypt compare
 - `doesIdentifiersAlreadyExists(UserAuth user)` — uniqueness check
 - `generateToken(UserAuth user, HttpServletRequest req)` — JWT access token
@@ -342,7 +343,24 @@ Key methods inherited:
 - `evictUser(Object id)` — invalidate a single user from cache (call after save/update/delete)
 - `evictAllUsers()` — invalidate the entire user cache
 
-**IMPORTANT**: Override `findUserByIdentifer()` in your `AuthenticationService` subclass with a targeted database query. The default implementation loads ALL users into memory on every login attempt.
+The default lookup issues one query per `@IdentifierField` column and stops at the first match — no full-table scan. Override `findUserByIdentifer()` only when you need different semantics (single-column lookup, case-insensitive matching, soft-delete filtering).
+
+**Index your identifier columns.** `WHERE username = ?` on an unindexed column is a sequential scan, so an unindexed identifier makes every login O(rows) — a cheap DoS lever. Declare it on the entity:
+
+```java
+@Entity
+@Table(name = "users", indexes = @Index(columnList = "username"))
+public class User implements IdentifiableEntity, UserAuth {
+    @IdentifierField
+    private String username;
+
+    @IdentifierField
+    @Column(unique = true)   // unique constraint also creates an index
+    private String email;
+}
+```
+
+`AuthenticationService`'s constructor runs `IdentifierIndexCheck` and logs a WARN once per user class listing identifier fields with no declared index, unique constraint, or `@Id`. The check reads JPA annotations only — an index added by hand or by a migration tool is invisible to it and still warns. Only the *leading* column of a composite index counts.
 
 #### User Cache
 
@@ -861,7 +879,7 @@ Pre-cache at startup: `server.preloadDto()`.
 - `SessionService` is optional — without it, auth is pure stateless JWT and session methods on `UserAuth` throw `IllegalStateException`.
 - JWT secret is **mandatory** in production mode. `start()` throws `IllegalStateException` if not configured. Use `enableDevelopmentMode()` for local dev.
 - JwtUtil uses lazy initialization — it does not require `FiberServer` to exist at class loading time.
-- Override `findUserByIdentifer()` in your `AuthenticationService` subclass for efficient user lookup.
+- `findUserByIdentifer()` queries each `@IdentifierField` column directly — index them, or startup logs a WARN. Override only for custom matching semantics.
 
 ### Security
 - `@NoCors` is enforced at runtime — CORS headers are skipped for annotated endpoints.

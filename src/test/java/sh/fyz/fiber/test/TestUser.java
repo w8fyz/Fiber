@@ -9,7 +9,8 @@ import sh.fyz.fiber.validation.Email;
 import sh.fyz.fiber.validation.NotBlank;
 
 @Entity
-@Table(name = "fiber_test_users")
+@Table(name = "fiber_test_users",
+        indexes = @Index(name = "idx_fiber_test_users_username", columnList = "username"))
 public class TestUser implements IdentifiableEntity, UserAuth {
 
     @Id

@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.architect.repositories.GenericRepository;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.JwtUtil;
+import sh.fyz.fiber.core.authentication.entities.IdentifierIndexCheck;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import java.util.EnumSet;
 import sh.fyz.fiber.core.authentication.entities.UserFieldUtil;
@@ -34,6 +35,7 @@ public abstract class AuthenticationService<T extends UserAuth> {
                 .setSameSite(FiberServer.get().isDev() ? SameSitePolicy.LAX : SameSitePolicy.STRICT)
                 .setSecure(!FiberServer.get().isDev());
         this.userCache = buildDefaultCache();
+        IdentifierIndexCheck.warnIfUnindexed(getUserClass());
     }
 
     public AuthenticationService(GenericRepository<T> userRepository, String authEndpoint, AuthCookieConfig cookieConfig) {
@@ -41,6 +43,7 @@ public abstract class AuthenticationService<T extends UserAuth> {
         this.refreshTokenPath = authEndpoint;
         this.cookieConfig = cookieConfig;
         this.userCache = buildDefaultCache();
+        IdentifierIndexCheck.warnIfUnindexed(getUserClass());
     }
 
     private Cache<Object, T> buildDefaultCache() {
@@ -90,21 +93,42 @@ public abstract class AuthenticationService<T extends UserAuth> {
     }
 
     /**
-     * Override this method to provide an efficient database query for user lookup by identifier.
-     * The default implementation loads all users in memory (not suitable for production).
+     * Look up a user by any of its {@link sh.fyz.fiber.annotations.auth.IdentifierField}
+     * annotated fields (username, email, ...). Override only if you need
+     * different matching semantics — e.g. case-insensitive lookup, or
+     * restricting the search to a single column.
      */
     public UserAuth findUserByIdentifer(String identifier) {
         return findByIdentifier(identifier);
     }
 
+    /**
+     * Issues one indexed {@code WHERE <identifier_field> = ?} query per
+     * identifier column and stops at the first hit. Only the matching row
+     * leaves the database — the previous implementation materialized the whole
+     * user table on every login attempt.
+     */
     protected UserAuth findByIdentifier(String identifier) {
-        return UserFieldUtil.findUserByIdentifier(identifier, userRepository.all());
+        if (identifier == null || identifier.isBlank()) {
+            return null;
+        }
+        for (String field : UserFieldUtil.getIdentifierFieldNames(getUserClass())) {
+            T user = userRepository.query().where(field, identifier).findFirst();
+            if (user != null) {
+                return user;
+            }
+        }
+        return null;
     }
 
     public boolean doesIdentifiersAlreadyExists(UserAuth user) {
         Map<String, String> identifiers = UserFieldUtil.getIdentifiers(user);
         for (Map.Entry<String, String> entry : identifiers.entrySet()) {
-            if (findUserByIdentifer(entry.getValue()) != null) {
+            String value = entry.getValue();
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            if (findUserByIdentifer(value) != null) {
                 return true;
             }
         }

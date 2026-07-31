@@ -5,9 +5,11 @@ import sh.fyz.fiber.annotations.auth.PasswordField;
 import sh.fyz.fiber.core.security.BCryptUtil;
 
 import java.lang.reflect.Field;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class UserFieldUtil {
@@ -72,6 +74,21 @@ public class UserFieldUtil {
         } catch (IllegalAccessException e) {
             throw new RuntimeException("Failed to get password", e);
         }
+    }
+
+    /**
+     * Names of the fields annotated with {@link IdentifierField} on the given
+     * user class. Backed by the same cache as {@link #getIdentifiers(UserAuth)},
+     * so it is cheap enough to call on every lookup. Used to build targeted
+     * per-column queries instead of scanning the whole user table.
+     */
+    public static Set<String> getIdentifierFieldNames(Class<?> userClass) {
+        Map<String, Field> fields = identifierFields.get(userClass);
+        if (fields == null) {
+            validateUserClass(userClass);
+            fields = identifierFields.get(userClass);
+        }
+        return Collections.unmodifiableSet(fields.keySet());
     }
 
     public static Map<String, String> getIdentifiers(UserAuth user) {
@@ -172,6 +189,12 @@ public class UserFieldUtil {
         return BCryptUtil.checkPassword(password, hashedPassword);
     }
 
+    /**
+     * @deprecated in-memory scan over an already-materialized user list. Use
+     * {@code AuthenticationService#findUserByIdentifer(String)}, which issues
+     * one targeted query per identifier column instead of loading every user.
+     */
+    @Deprecated
     public static UserAuth findUserByIdentifier(String identifier, List<? extends UserAuth> users) {
         for (UserAuth user : users) {
             Map<String, String> userIdentifiers = getIdentifiers(user);
