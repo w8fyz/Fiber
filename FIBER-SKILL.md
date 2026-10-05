@@ -9,7 +9,7 @@ description: >-
 
 # Fiber Framework
 
-Fiber is a Java 21+ RESTful API framework built on Jetty 11 with annotation-driven routing, built-in JWT authentication, OAuth2, server-side sessions, CORS, CSRF, rate limiting, validation, file uploads, and email templating.
+Fiber is a Java 21+ RESTful API framework built on Jetty 12 (Jakarta EE 11, Servlet 6.1) with annotation-driven routing, built-in JWT authentication, OAuth2, server-side sessions, CORS, CSRF, rate limiting, validation, file uploads, and email templating.
 
 ## Project Structure
 
