@@ -5,6 +5,8 @@ import sh.fyz.architect.Architect;
 import sh.fyz.architect.persistent.DatabaseCredentials;
 import sh.fyz.architect.persistent.sql.provider.PostgreSQLAuth;
 import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.fiber.core.authentication.impl.BearerAuthenticator;
+import sh.fyz.fiber.core.authentication.impl.CookieAuthenticator;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthScheme;
@@ -220,6 +222,8 @@ public class FiberBenchmark {
         server.enableDevelopmentMode();
 
         BenchAuthService authService = new BenchAuthService(userRepo);
+        server.getAuthResolver().registerAuthenticator(new CookieAuthenticator());
+        server.getAuthResolver().registerAuthenticator(new BearerAuthenticator());
         server.setAuthService(authService);
         server.setSessionService(new SessionService(sessionRepo));
         server.setAuditLogService(new BenchAuditLogService());
