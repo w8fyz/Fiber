@@ -3,6 +3,7 @@ package sh.fyz.fiber;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,6 +22,17 @@ public class ErrorHandlerTest extends IntegrationTestBase {
         assertTrue(resp.body().contains("\"status\":400"), resp.body());
         assertTrue(resp.body().contains("\"message\":\"Ambiguous URI path separator\""), resp.body());
         assertJettyHidden(resp);
+    }
+
+    @Test
+    void ambiguousUriIsRejectedAsJsonForEveryMethod() throws Exception {
+        for (HttpResponse<String> resp : List.of(put("/test/a%2Fb", "{}"), delete("/test/a%2Fb"))) {
+            assertEquals(400, resp.statusCode());
+            assertTrue(resp.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
+            assertTrue(resp.body().contains("\"status\":400"), resp.body());
+            assertTrue(resp.body().contains("\"message\":\"Ambiguous URI path separator\""), resp.body());
+            assertJettyHidden(resp);
+        }
     }
 
     @Test

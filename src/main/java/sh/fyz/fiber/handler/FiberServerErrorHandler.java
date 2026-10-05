@@ -27,6 +27,13 @@ public class FiberServerErrorHandler extends ErrorHandler {
         setShowOrigin(false);
     }
 
+    // Jetty only writes a body for GET/POST/HEAD by default; a JSON API answers errors on any
+    // method. HEAD bodies and no-body statuses (204, 304) are still dropped by Jetty.
+    @Override
+    public boolean errorPageForMethod(String method) {
+        return true;
+    }
+
     @Override
     protected void generateResponse(Request request, Response response, int code, String message,
                                     Throwable cause, Callback callback) throws IOException {

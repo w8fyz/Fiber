@@ -38,6 +38,13 @@ public class FiberErrorHandler extends ErrorHandler {
         setShowOrigin(false);
     }
 
+    // Jetty only writes a body for GET/POST/HEAD by default; a JSON API answers errors on any
+    // method. HEAD bodies and no-body statuses (204, 304) are still dropped by Jetty.
+    @Override
+    public boolean errorPageForMethod(String method) {
+        return true;
+    }
+
     // Always JSON, whatever the Accept header asks for. "application/json" with UTF-8 is always
     // acceptable, and ee11's handle() completes the callback itself.
     @Override
