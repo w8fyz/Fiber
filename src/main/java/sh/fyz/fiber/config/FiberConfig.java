@@ -36,6 +36,15 @@ public class FiberConfig extends Config {
     private int BCRYPT_COST = 12;
 
     private void validate() {
+        // Without a usable secret in fiberconfig.json, FIBER_SECRET_KEY supplies it to every consumer
+        // (CSRF tokens, stored OAuth2 token encryption, the start() check), not only to JwtUtil. A valid
+        // file secret is kept as is: data already protected with it must stay readable.
+        String envSecret = System.getenv("FIBER_SECRET_KEY");
+        boolean fileSecretUsable = !DEFAULT_SECRET.equals(JWT_SECRET_KEY) && JWT_SECRET_KEY != null
+                && JWT_SECRET_KEY.length() >= MIN_SECRET_LENGTH;
+        if (!fileSecretUsable && envSecret != null && !envSecret.isBlank()) {
+            JWT_SECRET_KEY = envSecret;
+        }
         if (DEFAULT_SECRET.equals(JWT_SECRET_KEY) || JWT_SECRET_KEY == null || JWT_SECRET_KEY.length() < MIN_SECRET_LENGTH) {
             byte[] randomBytes = new byte[48];
             new SecureRandom().nextBytes(randomBytes);

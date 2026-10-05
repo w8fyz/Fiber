@@ -10,6 +10,7 @@ import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -99,11 +100,13 @@ public class EmailService {
                 message.setSubject(email.getSubject());
 
                 MimeMultipart multipart = new MimeMultipart();
+                // Text and HTML are two renderings of the same body: the client shows one of them.
+                MimeMultipart body = new MimeMultipart("alternative");
                 
                 // Add text content
                 MimeBodyPart textPart = new MimeBodyPart();
                 textPart.setText(email.getContent());
-                multipart.addBodyPart(textPart);
+                body.addBodyPart(textPart);
 
                 // Add HTML content if available
                 if (email.getHtmlContent() != null) {
@@ -120,8 +123,11 @@ public class EmailService {
                     }
                     
                     htmlPart.setContent(htmlContent, "text/html; charset=utf-8");
-                    multipart.addBodyPart(htmlPart);
+                    body.addBodyPart(htmlPart);
                 }
+                MimeBodyPart bodyPart = new MimeBodyPart();
+                bodyPart.setContent(body);
+                multipart.addBodyPart(bodyPart);
 
                 // Add attachments
                 if (email.getAttachments() != null && !email.getAttachments().isEmpty()) {
@@ -157,6 +163,8 @@ public class EmailService {
         
         // Process all tables
         if (email.getTables() != null) {
+            // Work on a copy: the caller's map may be immutable (Map.of) and must not be modified.
+            variables = variables == null ? new HashMap<>() : new HashMap<>(variables);
             for (Map.Entry<String, Email.TableData> entry : email.getTables().entrySet()) {
                 String variableName = entry.getKey();
                 Email.TableData tableData = entry.getValue();

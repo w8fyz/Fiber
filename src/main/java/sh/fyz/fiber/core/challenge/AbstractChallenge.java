@@ -72,7 +72,8 @@ public abstract class AbstractChallenge extends DTOConvertible implements Challe
         if (callback != null) {
             return callback.onSuccess(this, request, response);
         }
-        return null;
+        // Without a callback, still answer for this outcome: null would be reported as "expired" (410).
+        return ResponseEntity.ok("Challenge completed");
     }
 
     @Override
@@ -81,7 +82,7 @@ public abstract class AbstractChallenge extends DTOConvertible implements Challe
         if (callback != null) {
             return callback.onFailure(this, "INVALID_RESPONSE", request, response);
         }
-        return null;
+        return ResponseEntity.badRequest("Invalid challenge response");
     }
 
     @Override

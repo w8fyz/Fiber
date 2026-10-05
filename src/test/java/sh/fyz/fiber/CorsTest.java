@@ -2,7 +2,10 @@ package sh.fyz.fiber;
 
 import org.junit.jupiter.api.*;
 
+import java.net.URI;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -60,5 +63,26 @@ public class CorsTest extends IntegrationTestBase {
 
         String allowCredentials = resp.headers().firstValue("Access-Control-Allow-Credentials").orElse("");
         assertEquals("true", allowCredentials);
+    }
+
+    @Test
+    @Order(6)
+    void testSameOriginRequestIsNotRejected() throws Exception {
+        // Browsers send Origin on same-origin POSTs and fetch calls. 127.0.0.1 is not in the
+        // allow-list (localhost is), so only the same-origin rule can let this request through.
+        String self = "http://127.0.0.1:" + PORT;
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(self + "/test/hello"))
+                .GET()
+                .header("Origin", self)
+                .timeout(Duration.ofSeconds(10))
+                .build();
+        HttpResponse<String> resp = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, resp.statusCode());
+        assertTrue(resp.headers().firstValue("Access-Control-Allow-Origin").isEmpty(),
+                "CORS headers are not needed for a same-origin request");
+
+        HttpResponse<String> crossOrigin = get("/test/hello", Map.of("Origin", "http://127.0.0.1:1"));
+        assertEquals(403, crossOrigin.statusCode(), "Another port is another origin");
     }
 }

@@ -128,6 +128,7 @@ public class RouterServlet extends HttpServlet {
             logger.debug("Bad request: {} {} — {}", req.getMethod(), req.getRequestURI(), e.getMessage());
             if (!resp.isCommitted()) {
                 resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                resp.setContentType("application/json");
                 String body = "{\"status\":400,\"message\":" + jsonEscape(e.getMessage()) + "}";
                 resp.getOutputStream().write(body.getBytes());
             }
@@ -135,6 +136,7 @@ public class RouterServlet extends HttpServlet {
             FiberLog.handle(e, "Unhandled error processing {} {}", req.getMethod(), req.getRequestURI());
             if (!resp.isCommitted()) {
                 resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                resp.setContentType("application/json");
                 resp.getOutputStream().write("{\"status\":500,\"message\":\"Could not process the request right now, please try again.\"}".getBytes());
             }
         } finally {

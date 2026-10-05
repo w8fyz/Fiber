@@ -7,6 +7,8 @@ import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.util.ResponseContext;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,6 +23,7 @@ import java.util.concurrent.TimeUnit;
  */
 public abstract class OAuth2AuthenticationService<T extends UserAuth> {
     private static final long STATE_TTL_MINUTES = 10;
+    private static final String STATE_COOKIE = "oauth_state";
 
     private final AuthenticationService<T> authenticationService;
     private final Map<String, OAuth2Provider<T>> providers;
@@ -68,10 +71,12 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
 
     private static class StateEntry {
         final String providerId;
+        final boolean browserBound;
         final long expiresAt;
 
-        StateEntry(String providerId) {
+        StateEntry(String providerId, boolean browserBound) {
             this.providerId = providerId;
+            this.browserBound = browserBound;
             this.expiresAt = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(STATE_TTL_MINUTES);
         }
     }
@@ -94,21 +99,69 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
     }
 
     /**
-     * Get the authorization URL for a specific provider
+     * Get the authorization URL for a specific provider.
+     *
+     * <p>The state is not bound to the browser that started the flow, so a callback URL
+     * started by someone else is accepted (login CSRF). Prefer
+     * {@link #getAuthorizationUrl(String, String, HttpServletResponse)}.</p>
+     *
      * @param providerId The provider ID
      * @param redirectUri The callback URL
      * @return The authorization URL
      */
     public String getAuthorizationUrl(String providerId, String redirectUri) {
+        return createAuthorizationUrl(providerId, redirectUri, null);
+    }
+
+    /**
+     * Get the authorization URL for a specific provider, binding the state to the current
+     * browser with a short-lived {@code oauth_state} cookie (HttpOnly, SameSite=Lax).
+     * {@link #handleCallback} then rejects a callback whose request does not carry that cookie,
+     * so an attacker cannot log a victim into the attacker's account by sending them a callback
+     * URL. The callback request must reach this server with the browser's cookies: a top-level
+     * GET redirect works, a cross-site POST ({@code response_mode=form_post}) does not carry the
+     * SameSite=Lax cookie.
+     *
+     * @param providerId The provider ID
+     * @param redirectUri The callback URL
+     * @param response The current response, to set the state cookie on
+     * @return The authorization URL
+     */
+    public String getAuthorizationUrl(String providerId, String redirectUri, HttpServletResponse response) {
+        return createAuthorizationUrl(providerId, redirectUri, response);
+    }
+
+    private String createAuthorizationUrl(String providerId, String redirectUri, HttpServletResponse response) {
         OAuth2Provider<T> provider = providers.get(providerId);
         if (provider == null) {
             throw new IllegalArgumentException("Provider not found: " + providerId);
         }
 
         String state = UUID.randomUUID().toString();
-        stateStore.put(state, new StateEntry(providerId));
+        stateStore.put(state, new StateEntry(providerId, response != null));
+        if (response != null) {
+            response.addHeader("Set-Cookie", stateCookie(state, TimeUnit.MINUTES.toSeconds(STATE_TTL_MINUTES)));
+        }
 
         return provider.getAuthorizationUrl(state, redirectUri);
+    }
+
+    private String stateCookie(String value, long maxAgeSeconds) {
+        // Lax, not the auth cookies' Strict default: the callback is a cross-site navigation from the provider.
+        return STATE_COOKIE + "=" + value + "; Path=/; Max-Age=" + maxAgeSeconds + "; HttpOnly; SameSite=Lax"
+                + (authenticationService.getCookieConfig().isSecure() ? "; Secure" : "");
+    }
+
+    private static String readCookie(HttpServletRequest request, String name) {
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie c : cookies) {
+                if (name.equals(c.getName())) {
+                    return c.getValue();
+                }
+            }
+        }
+        return null;
     }
 
     public String getProviderIdFromState(String state) {
@@ -147,6 +200,15 @@ public abstract class OAuth2AuthenticationService<T extends UserAuth> {
         StateEntry stateEntry = stateStore.remove(state);
         if (stateEntry == null || System.currentTimeMillis() > stateEntry.expiresAt) {
             throw new IllegalArgumentException("Invalid or expired state parameter");
+        }
+        if (stateEntry.browserBound) {
+            String cookieState = readCookie(request, STATE_COOKIE);
+            if (cookieState == null || !MessageDigest.isEqual(
+                    cookieState.getBytes(StandardCharsets.UTF_8), state.getBytes(StandardCharsets.UTF_8))) {
+                // The cookie is left alone: it may belong to a newer flow started in another tab.
+                throw new IllegalArgumentException("State was not issued to this browser");
+            }
+            response.addHeader("Set-Cookie", stateCookie("", 0));
         }
         String providerId = stateEntry.providerId;
         if (providerId == null) {

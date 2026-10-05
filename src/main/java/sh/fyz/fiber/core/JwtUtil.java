@@ -187,6 +187,27 @@ public class JwtUtil {
         }
     }
 
+    /**
+     * Atomically revoke a refresh token, returning {@code true} only for the first caller.
+     * Lets a refresh flow claim a token as single-use so two concurrent requests replaying
+     * the same token cannot both succeed. Returns {@code false} for an already revoked,
+     * forged, malformed or expired token.
+     */
+    public static boolean consumeRefreshToken(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+        Claims claims;
+        try {
+            claims = extractAllClaims(token);
+        } catch (Exception e) {
+            return false;
+        }
+        Date expiration = claims.getExpiration();
+        return expiration != null
+                && REVOKED_REFRESH_TOKENS.asMap().putIfAbsent(token, expiration.getTime()) == null;
+    }
+
     /** Visible for testing. */
     public static void clearRevokedRefreshTokens() {
         REVOKED_REFRESH_TOKENS.invalidateAll();

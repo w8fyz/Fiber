@@ -63,6 +63,15 @@ public class TestAuthController {
         return ResponseEntity.ok(Map.of("id", user.getId(), "role", user.getRole()));
     }
 
+    /** Logout as the README shows it: the endpoint does not authenticate the request. */
+    @RequestMapping(value = "/logout-unauthenticated", method = RequestMapping.Method.POST)
+    @NoCSRF
+    public ResponseEntity<Object> logoutUnauthenticated(HttpServletRequest request,
+                                                        HttpServletResponse response) {
+        FiberServer.get().getAuthService().clearAuthCookies(request, response);
+        return ResponseEntity.ok(Map.of("status", "logged_out"));
+    }
+
     @RequestMapping(value = "/logout", method = RequestMapping.Method.POST)
     @NoCSRF
     @AuthType({AuthScheme.COOKIE, AuthScheme.BEARER})

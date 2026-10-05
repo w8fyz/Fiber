@@ -61,6 +61,10 @@ public abstract class AuthenticationService<T extends UserAuth> {
         return buildDefaultCache();
     }
 
+    public AuthCookieConfig getCookieConfig() {
+        return cookieConfig;
+    }
+
     public Class<T> getUserClass() {
         return userRepository.getEntityClass();
     }
@@ -69,7 +73,7 @@ public abstract class AuthenticationService<T extends UserAuth> {
         if (userCache == null) {
             return userRepository.findById(id);
         }
-        return userCache.get(id, k -> userRepository.findById(k));
+        return userCache.get(cacheKey(id), k -> userRepository.findById(id));
     }
 
     /**
@@ -77,8 +81,20 @@ public abstract class AuthenticationService<T extends UserAuth> {
      */
     public void evictUser(Object id) {
         if (userCache != null) {
-            userCache.invalidate(id);
+            userCache.invalidate(cacheKey(id));
         }
+    }
+
+    /**
+     * Ids read back from a JWT claim are deserialized as the smallest fitting number type
+     * ({@code Integer} for a small {@code long} id), so integral ids are keyed by their
+     * {@code long} value: {@link #evictUser} then hits the entry whatever the id's boxed type.
+     */
+    private static Object cacheKey(Object id) {
+        if (id instanceof Integer || id instanceof Long || id instanceof Short || id instanceof Byte) {
+            return ((Number) id).longValue();
+        }
+        return id;
     }
 
     /** Evict all cached users. */
@@ -219,6 +235,15 @@ public abstract class AuthenticationService<T extends UserAuth> {
             return null;
         }
 
+        // Claim the token before touching the session or minting its replacement: of several requests
+        // replaying the same token concurrently, only the first one gets past this point (atomic), and
+        // the others leave no session context behind. If the client never receives the new cookie
+        // (network drop between Set-Cookie and Response delivery) they'll need to log in again — the
+        // trade-off is worth it: a leaked refresh token cannot be replayed.
+        if (!JwtUtil.consumeRefreshToken(refreshToken)) {
+            return null;
+        }
+
         String existingSessionId = JwtUtil.extractSessionId(refreshToken);
         String sessionIdToUse = existingSessionId;
         SessionService sessionService = FiberServer.get().getSessionService();
@@ -243,12 +268,6 @@ public abstract class AuthenticationService<T extends UserAuth> {
                 SessionContext.set(session);
             }
         }
-
-        // Invalidate the token we just consumed before minting its replacement.
-        // If the client never receives the new cookie (network drop between
-        // Set-Cookie and Response delivery) they'll need to log in again — the
-        // trade-off is worth it: a leaked refresh token cannot be replayed.
-        JwtUtil.revokeRefreshToken(refreshToken);
 
         writeAuthCookies(user, request, response, sessionIdToUse);
         return user;
@@ -306,20 +325,38 @@ public abstract class AuthenticationService<T extends UserAuth> {
     public void clearAuthCookies(HttpServletRequest request, HttpServletResponse response) {
         // Revoke the refresh token so it cannot be replayed even if it was leaked
         // (network capture, malicious browser extension, etc.).
+        String cookieSessionId = null;
+        String accessToken = null;
+        boolean staleRefreshToken = false;
         jakarta.servlet.http.Cookie[] cookies = request.getCookies();
         if (cookies != null) {
             for (jakarta.servlet.http.Cookie c : cookies) {
                 if ("refresh_token".equals(c.getName())) {
-                    JwtUtil.revokeRefreshToken(c.getValue());
+                    // Revokes the token; true only if it was still a current (unrevoked) credential.
+                    if (JwtUtil.consumeRefreshToken(c.getValue())) {
+                        cookieSessionId = JwtUtil.extractSessionId(c.getValue());
+                    } else {
+                        staleRefreshToken = true;
+                    }
+                } else if ("access_token".equals(c.getName())) {
+                    accessToken = c.getValue();
                 }
             }
+        }
+        // A request carrying an already rotated refresh token (e.g. the loser of two concurrent
+        // refreshes) is stale: its session was handed on to the newer tokens and must not be killed.
+        if (cookieSessionId == null && !staleRefreshToken && accessToken != null) {
+            cookieSessionId = JwtUtil.extractSessionId(accessToken);
         }
 
         SessionService sessionService = FiberServer.get().getSessionService();
         if (sessionService != null) {
             FiberSession currentSession = SessionContext.current();
-            if (currentSession != null) {
-                sessionService.invalidate(currentSession.getSessionId());
+            // The session context is only set when the endpoint authenticated the request; otherwise
+            // fall back to the session id carried by the (signed) auth cookies.
+            String sessionId = currentSession != null ? currentSession.getSessionId() : cookieSessionId;
+            if (sessionId != null) {
+                sessionService.invalidate(sessionId);
             }
         }
 

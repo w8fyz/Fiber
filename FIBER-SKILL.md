@@ -465,6 +465,10 @@ public class MyOAuth2Service extends OAuth2AuthenticationService<User> {
 }
 ```
 
+**Login CSRF protection**
+
+Start the flow with `oauthService.getAuthorizationUrl(providerId, redirectUri, response)`: it binds the `state` to the browser with a short-lived `oauth_state` cookie (HttpOnly, SameSite=Lax), and `handleCallback` rejects a callback that does not carry it. The callback must reach the server as a top-level GET redirect with the browser's cookies (not `response_mode=form_post`). The two-argument `getAuthorizationUrl(providerId, redirectUri)` is kept for compatibility but does not bind the state.
+
 **Token persistence & rate-limit hygiene**
 
 Providers like Discord rate-limit the `/oauth2/token` endpoint hard. To avoid exhausting the app's quota:

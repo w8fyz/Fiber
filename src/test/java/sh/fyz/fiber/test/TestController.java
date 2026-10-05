@@ -48,6 +48,11 @@ public class TestController {
         return Map.of("name", name, "age", age);
     }
 
+    @RequestMapping(value = "/optional-int", method = RequestMapping.Method.GET)
+    public Map<String, Object> optionalInt(@Param(value = "page", required = false) int page) {
+        return Map.of("page", page);
+    }
+
     @RequestMapping(value = "/body", method = RequestMapping.Method.POST)
     @NoCSRF
     public Map<String, Object> body(@RequestBody TestRequestBody requestBody) {
