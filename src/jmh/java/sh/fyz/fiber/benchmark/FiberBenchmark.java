@@ -210,7 +210,7 @@ public class FiberBenchmark {
         architect = new Architect()
                 .setDatabaseCredentials(new DatabaseCredentials(
                         new PostgreSQLAuth(dbHost, dbPort, dbName),
-                        dbUser, dbPassword, 4, 2));
+                        dbUser, dbPassword, 4));
         architect.start();
 
         GenericRepository<BenchUser> userRepo = new GenericRepository<>(BenchUser.class);

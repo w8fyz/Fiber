@@ -57,7 +57,7 @@ public abstract class IntegrationTestBase {
                 .setDatabaseCredentials(
                         new DatabaseCredentials(
                                 new PostgreSQLAuth(dbHost, dbPort, dbName),
-                                dbUser, dbPassword, 4, 2));
+                                dbUser, dbPassword, 4));
         architect.start();
 
         userRepository = new GenericRepository<>(TestUser.class);
