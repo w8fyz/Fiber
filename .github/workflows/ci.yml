@@ -5,6 +5,11 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Bytecode targets 21 (options.release); also build on the latest JDK.
+        java: [21, 25]
     services:
       postgres:
         image: postgres:18
@@ -30,14 +35,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: gradle/actions/wrapper-validation@v6
+
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 21
+          java-version: ${{ matrix.java }}
           cache: gradle
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
 
       - name: Run tests
         run: ./gradlew test
@@ -46,5 +50,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results
+          name: test-results-java${{ matrix.java }}
           path: build/reports/tests/

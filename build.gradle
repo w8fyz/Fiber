@@ -15,6 +15,8 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.withType(Javadoc).configureEach {
+    // Link and check against the Java 21 API even when Gradle runs on a newer JDK.
+    options.addStringOption('-release', '21')
     options.encoding = 'UTF-8'
     options.addStringOption('Xdoclint:none', '-quiet')
 }
@@ -34,8 +36,8 @@ dependencies {
     implementation 'org.postgresql:postgresql:42.7.13'
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 
-    api 'org.eclipse.jetty:jetty-server:12.1.13'
-    api 'org.eclipse.jetty.ee11:jetty-ee11-servlet:12.1.13'
+    api 'org.eclipse.jetty:jetty-server:12.1.14'
+    api 'org.eclipse.jetty.ee11:jetty-ee11-servlet:12.1.14'
     api 'jakarta.servlet:jakarta.servlet-api:6.1.0'
     api 'io.jsonwebtoken:jjwt:0.13.0'
     api 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
@@ -97,7 +99,8 @@ signing {
 test {
     useJUnitPlatform()
     // Mockito's inline mock maker as a declared agent: self-attaching is going away in future JDKs.
-    jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}"
+    def mockitoAgentFiles = configurations.mockitoAgent
+    jvmArgumentProviders.add({ ["-javaagent:${mockitoAgentFiles.singleFile}".toString()] } as CommandLineArgumentProvider)
     testLogging {
         events 'passed', 'skipped', 'failed'
         showStandardStreams = true

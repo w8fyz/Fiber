@@ -1,6 +1,9 @@
 package sh.fyz.fiber;
 
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
@@ -23,6 +26,7 @@ import sh.fyz.fiber.core.security.logging.AuditLogService;
 import sh.fyz.fiber.core.upload.FileUploadManager;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.handler.FiberErrorHandler;
+import sh.fyz.fiber.handler.FiberServerErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.middleware.impl.CsrfMiddleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
@@ -109,9 +113,13 @@ public class FiberServer {
         QueuedThreadPool threadPool = new QueuedThreadPool();
         threadPool.setVirtualThreadsExecutor(Executors.newVirtualThreadPerTaskExecutor());
         this.server = new Server(threadPool);
-        org.eclipse.jetty.server.ServerConnector connector = new org.eclipse.jetty.server.ServerConnector(server);
+        HttpConfiguration httpConfig = new HttpConfiguration();
+        // Never advertise "Jetty(x.y.z)", including on errors Jetty answers before Fiber's filters run.
+        httpConfig.setSendServerVersion(false);
+        ServerConnector connector = new ServerConnector(server, new HttpConnectionFactory(httpConfig));
         connector.setPort(port);
         server.addConnector(connector);
+        server.setErrorHandler(new FiberServerErrorHandler());
 
         this.context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         this.globalMiddleware = new CopyOnWriteArrayList<>();

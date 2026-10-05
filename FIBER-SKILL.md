@@ -112,7 +112,8 @@ src/main/java/sh/fyz/fiber/
 │       └── UploadedFile.java                   # File wrapper: moveTo, cleanup, getInputStream
 ├── handler/
 │   ├── EndpointHandler.java                    # Per-route handler: security → params → invoke
-│   ├── FiberErrorHandler.java                  # Jetty error handler (JSON)
+│   ├── FiberErrorHandler.java                  # Servlet-context error handler (JSON)
+│   ├── FiberServerErrorHandler.java            # Server-level error handler (bad URI, headers...) (JSON)
 │   ├── ParameterResolver.java                  # Resolves method arguments from request
 │   ├── ResponseWriter.java                     # Writes result to HttpServletResponse (writeValueAsBytes)
 │   ├── RouterServlet.java                      # O(1) static route lookup, linear scan for dynamic routes
@@ -870,8 +871,9 @@ Pre-cache at startup: `server.preloadDto()`.
 ### Lifecycle
 - Always call `server.start()` after all configuration is done.
 - `FiberServer.get()` is available after the constructor returns (singleton).
-- `stop()` performs graceful shutdown: stops Jetty and cleans up FileUploadManager.
-- Register authenticators on `server.getAuthResolver()` (Cookie + Bearer are registered by default).
+- `stop()` stops Jetty (in-flight requests are not drained), then cleans up FileUploadManager, the OAuth2 client service and the shared executor.
+- Register authenticators on `server.getAuthResolver()` before `start()`: none are registered by default, and an authenticated request fails with "No authenticators registered" until `CookieAuthenticator`/`BearerAuthenticator` are added.
+- Jetty 12 rejects ambiguous URIs (e.g. an encoded slash `%2F` or an encoded percent `%25` in a path) with 400 before they reach Fiber. Every error Jetty or the servlet layer renders is JSON `{url, status, message}` and never names the Jetty version.
 - `registerController(Class<?>)` requires a no-arg constructor; `registerController(Object)` uses the provided instance.
 - Duplicate endpoint registrations are logged as warnings and silently ignored.
 
