@@ -25,6 +25,10 @@ tasks.withType(Javadoc).configureEach {
     options.addStringOption('Xdoclint:none', '-quiet')
 }
 
+configurations {
+    mockitoAgent
+}
+
 repositories {
     mavenLocal()
     mavenCentral()
@@ -57,6 +61,9 @@ dependencies {
     testImplementation 'org.awaitility:awaitility:4.3.0'
     testImplementation 'com.icegreen:greenmail:2.1.14'
     testImplementation 'org.mockito:mockito-core:5.24.0'
+    mockitoAgent('org.mockito:mockito-core:5.24.0') {
+        transitive = false
+    }
 }
 
 mavenPublishing {
@@ -95,6 +102,8 @@ signing {
 
 test {
     useJUnitPlatform()
+    // Mockito's inline mock maker as a declared agent: self-attaching is going away in future JDKs.
+    jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}"
     testLogging {
         events 'passed', 'skipped', 'failed'
         showStandardStreams = true
