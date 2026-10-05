@@ -5,12 +5,14 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.architect.repositories.QueryBuilder;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.authentication.oauth2.entities.UserOAuth2Token;
 import sh.fyz.fiber.util.TokenCrypto;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executors;
@@ -171,17 +173,15 @@ public class UserOAuth2TokenService {
      * refresh them.
      */
     public void cleanupExpiredWithoutRefresh() {
+        // One DELETE instead of loading the whole table. The deleted keys are unknown, so drop the
+        // whole cache (30-second entries, hourly job) rather than let find() return deleted rows.
         try {
-            List<UserOAuth2Token> rows = repository.query().findAll();
-            long now = System.currentTimeMillis();
-            for (UserOAuth2Token row : rows) {
-                Long exp = row.getExpiresAt();
-                boolean expired = exp != null && now >= exp;
-                boolean noRefresh = row.getRefreshToken() == null || row.getRefreshToken().isBlank();
-                if (expired && noRefresh) {
-                    repository.delete(row);
-                    cache.invalidate(cacheKey(row.getUserId(), row.getProviderId()));
-                }
+            int deleted = repository.query()
+                    .where("expiresAt", QueryBuilder.Operator.LTE, System.currentTimeMillis())
+                    .whereRaw("refreshToken IS NULL OR trim(refreshToken) = ''", Map.of())
+                    .delete();
+            if (deleted > 0) {
+                cache.invalidateAll();
             }
         } catch (Exception e) {
             logger.warn("[Fiber] OAuth2 token cleanup failed: {}", e.getMessage());

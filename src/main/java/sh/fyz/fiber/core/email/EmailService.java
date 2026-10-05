@@ -24,6 +24,9 @@ public class EmailService {
     /** SMTP I/O blocks: keep it off the common ForkJoinPool shared by the whole JVM. */
     private static final ExecutorService SEND_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
+    private static final String SMTP_CONNECT_TIMEOUT_MILLIS = "10000";
+    private static final String SMTP_READ_TIMEOUT_MILLIS = "30000";
+
     private final jakarta.mail.Session session;
     private final String from;
     private final String username;
@@ -59,7 +62,10 @@ public class EmailService {
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.host", host);
         props.put("mail.smtp.port", port);
-        
+        // Without these an unresponsive SMTP server holds a sending thread forever.
+        props.put("mail.smtp.connectiontimeout", SMTP_CONNECT_TIMEOUT_MILLIS);
+        props.put("mail.smtp.timeout", SMTP_READ_TIMEOUT_MILLIS);
+
         if (useSSL) {
             props.put("mail.smtp.ssl.enable", "true");
         }

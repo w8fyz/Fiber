@@ -2,27 +2,31 @@ package sh.fyz.fiber.core.security.interceptors;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
 import sh.fyz.fiber.core.security.annotations.RateLimit;
 import sh.fyz.fiber.core.security.exceptions.RateLimitExceededException;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Locale;
-import java.util.concurrent.*;
 
 public class RateLimitInterceptor {
 
     private static final int MAX_TRACKED_KEYS = 100_000;
 
+    // An entry idle for a whole window holds no attempt that still counts, so it may go then, and
+    // not before: a fixed 30-minute idle expiry handed out a fresh quota mid-window for longer windows.
     private static final Cache<String, AttemptInfo> fixedAttempts = Caffeine.newBuilder()
             .maximumSize(MAX_TRACKED_KEYS)
-            .expireAfterAccess(30, TimeUnit.MINUTES)
+            .expireAfter(Expiry.accessing((String key, AttemptInfo info) -> Duration.ofSeconds(info.windowSeconds)))
             .build();
 
     private static final Cache<String, SlidingWindowInfo> slidingAttempts = Caffeine.newBuilder()
             .maximumSize(MAX_TRACKED_KEYS)
-            .expireAfterAccess(30, TimeUnit.MINUTES)
+            .expireAfter(Expiry.accessing((String key, SlidingWindowInfo info) -> Duration.ofSeconds(info.windowSeconds)))
             .build();
 
     // Fixed window — all fields accessed under synchronized(this)
@@ -61,7 +65,7 @@ public class RateLimitInterceptor {
 
     // Sliding window — all access synchronized
     public static class SlidingWindowInfo {
-        private final Deque<Instant> timestamps = new ConcurrentLinkedDeque<>();
+        private final Deque<Instant> timestamps = new ArrayDeque<>();
         private final long windowSeconds;
         private final int maxAttempts;
         private final String message;

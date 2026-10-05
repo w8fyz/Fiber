@@ -53,6 +53,7 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -90,6 +91,12 @@ public class FiberServer {
     private int fileSizeThreshold = 1_000_000;
     private boolean started = false;
     private final ScheduledExecutorService sharedExecutor;
+    /**
+     * Audit records are processed off the request, two at a time in arrival order, on their own
+     * workers so a slow AuditLogService does not hold back the timers of the shared executor.
+     */
+    private final ExecutorService auditExecutor = Executors.newFixedThreadPool(2,
+            Thread.ofVirtual().name("fiber-audit-", 0).factory());
     private boolean defaultLogHandlerDisabled = false;
 
     public FiberConfig getConfig() {
@@ -430,13 +437,19 @@ public class FiberServer {
             oauthClientService.shutdown();
         }
         sharedExecutor.shutdown();
+        auditExecutor.shutdown();
         try {
             if (!sharedExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
                 logger.warn("Shared executor did not terminate within 10s — forcing shutdown");
                 sharedExecutor.shutdownNow();
             }
+            if (!auditExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                logger.warn("Audit executor did not terminate within 10s — forcing shutdown");
+                auditExecutor.shutdownNow();
+            }
         } catch (InterruptedException e) {
             sharedExecutor.shutdownNow();
+            auditExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
         started = false;
@@ -490,6 +503,11 @@ public class FiberServer {
         return this;
     }
 
+    /** @return the largest request body accepted, in bytes; -1 for no limit. */
+    public long getMaxRequestSize() {
+        return maxRequestSize;
+    }
+
     public FiberServer setFileSizeThreshold(int fileSizeThreshold) {
         this.fileSizeThreshold = fileSizeThreshold;
         return this;
@@ -503,5 +521,10 @@ public class FiberServer {
      */
     public ScheduledExecutorService getSharedExecutor() {
         return sharedExecutor;
+    }
+
+    /** Executor running {@code @AuditLog} processing; drained by {@link #stop()}. */
+    public ExecutorService getAuditExecutor() {
+        return auditExecutor;
     }
 }

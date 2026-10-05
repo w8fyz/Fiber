@@ -49,8 +49,8 @@ public class AuditLogProcessor {
     private static ExecutorService resolveExecutor() {
         try {
             FiberServer server = FiberServer.get();
-            if (server != null && server.getSharedExecutor() != null) {
-                return server.getSharedExecutor();
+            if (server != null) {
+                return server.getAuditExecutor();
             }
         } catch (Exception e) {
             FiberLog.handleSilent(e);

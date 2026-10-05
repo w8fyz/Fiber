@@ -73,7 +73,9 @@ public class OAuth2ClientController {
                                    @Param(value = "code_verifier", required = false) String codeVerifier,
                                    OAuth2ApplicationInfo applicationInfo) {
 
-        OAuth2Client client = clientService.getClientByCredentials(applicationInfo.clientId(), applicationInfo.clientSecret());
+        // The security pipeline already checked the secret (Basic auth): a second BCrypt check would
+        // double the cost of this endpoint for nothing.
+        OAuth2Client client = clientService.getClient(applicationInfo.clientId());
         if (client == null || !client.isEnabled()) {
             return ResponseEntity.unauthorized("Invalid client credentials");
         }

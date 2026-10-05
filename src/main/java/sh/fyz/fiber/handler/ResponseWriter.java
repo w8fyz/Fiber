@@ -9,7 +9,7 @@ import java.io.IOException;
 
 public class ResponseWriter {
 
-    private static final FiberObjectMapper MAPPER = new FiberObjectMapper();
+    private static final FiberObjectMapper MAPPER = FiberObjectMapper.forResponses();
 
     public static void write(Object result, HttpServletRequest req, HttpServletResponse resp) throws Exception {
         if (resp.isCommitted()) {

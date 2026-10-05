@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.util.*;
 
 public class ResponseEntity<T> {
-    private static final FiberObjectMapper MAPPER = new FiberObjectMapper();
+    private static final FiberObjectMapper MAPPER = FiberObjectMapper.forResponses();
 
     private final T body;
     private final Map<String, String> headers;

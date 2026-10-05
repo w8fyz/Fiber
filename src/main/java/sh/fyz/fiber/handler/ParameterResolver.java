@@ -50,6 +50,9 @@ public class ParameterResolver {
 
             try {
                 args[i] = handler.handle(parameter, req, resp, pathMatcher);
+            } catch (ResolveException e) {
+                // A handler that already chose its status (e.g. 413).
+                throw e;
             } catch (IllegalArgumentException e) {
                 throw new ResolveException(e.getMessage(), HttpServletResponse.SC_BAD_REQUEST);
             } catch (Exception e) {

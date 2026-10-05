@@ -556,7 +556,7 @@ server.setSessionService(new SessionService(sessionRepo));
 - `invalidateAllForUser(Object userId)`
 - `invalidateOtherSessions(Object userId, String keepSessionId)`
 - `touchSession(String sessionId)` — update lastAccessedAt
-- `cleanupExpired()` — runs automatically every hour
+- `cleanupExpired()` — deletes every session past its expiry, active or revoked; runs automatically every hour
 
 ### Inject in Controller
 

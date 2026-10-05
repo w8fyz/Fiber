@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Registry for challenge types and their creation functions.
@@ -29,9 +30,14 @@ public class ChallengeRegistry {
 
     private final Map<String, Entry> activeChallenges;
 
-    /** Failure counter guarded by the entry's monitor, which also serialises verifications. */
+    /**
+     * Failure counter guarded by the entry's lock, which also serialises verifications. A lock rather
+     * than a monitor: the challenge callbacks run under it and may block, which would pin a virtual
+     * thread's carrier on JDK 21.
+     */
     private static final class Entry {
         final Challenge challenge;
+        final ReentrantLock lock = new ReentrantLock();
         int failedAttempts;
 
         Entry(Challenge challenge) {
@@ -78,7 +84,8 @@ public class ChallengeRegistry {
             throw new ChallengeNotFoundException(challengeId);
         }
 
-        synchronized (entry) {
+        entry.lock.lock();
+        try {
             // A concurrent verification may have consumed the challenge meanwhile.
             if (activeChallenges.get(challengeId) != entry) {
                 throw new ChallengeNotFoundException(challengeId);
@@ -110,6 +117,8 @@ public class ChallengeRegistry {
                 logger.error("Failed to mark challenge {} as failed", challengeId, e);
                 throw new ChallengeValidationFailedException("Failed to fail challenge", e);
             }
+        } finally {
+            entry.lock.unlock();
         }
     }
 
