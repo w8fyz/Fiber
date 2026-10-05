@@ -7,15 +7,9 @@ plugins {
 group = 'sh.fyz'
 version = '2.2.5'
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
-
 tasks.withType(JavaCompile).configureEach {
+    // Any JDK 21+ can build; the bytecode and the JDK API used stay at Java 21.
+    options.release = 21
     options.encoding = 'UTF-8'
     options.compilerArgs += ['-parameters']
 }
