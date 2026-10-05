@@ -1,6 +1,7 @@
 package sh.fyz.fiber;
 
 import org.junit.jupiter.api.*;
+import sh.fyz.fiber.core.session.FiberSession;
 
 import java.net.http.HttpResponse;
 import java.util.Map;
@@ -83,6 +84,19 @@ public class SessionTest extends IntegrationTestBase {
         HttpResponse<String> sessionsResp = get("/test/sessions",
                 Map.of("Cookie", cookieHeader(session2Cookies)));
         assertEquals(200, sessionsResp.statusCode(), "Sessions after invalidation failed: " + sessionsResp.body());
+    }
+
+    @Test
+    @Order(7)
+    void testCleanupKeepsExpiredSessionsAsInactive() {
+        FiberSession expired = new FiberSession("cleanup" + RUN_ID, "127.0.0.1", "test", -60_000);
+        sessionRepository.save(expired);
+
+        sessionService.cleanupExpired();
+
+        FiberSession stored = sessionRepository.findById(expired.getSessionId());
+        assertNotNull(stored, "Expired session row should be kept");
+        assertFalse(stored.isActive(), "Expired session should be marked inactive");
     }
 
     private int countOccurrences(String str, String sub) {

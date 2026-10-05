@@ -136,14 +136,20 @@ public class SessionService {
     }
 
     /**
-     * Deletes every session past its expiry, active or revoked, in a single statement. Nothing reads them:
-     * an expired session is rejected whether or not its row exists, and cached copies are rejected too.
+     * Marks every active session past its expiry as inactive. Rows are kept, so the session history stays
+     * available; only the expired active sessions are loaded, not the whole table.
      */
     public void cleanupExpired() {
         try {
-            repository.query()
+            List<FiberSession> expired = repository.query()
+                    .where("active", true)
                     .where("expiresAt", QueryBuilder.Operator.LT, System.currentTimeMillis())
-                    .delete();
+                    .findAll();
+            for (FiberSession session : expired) {
+                session.setActive(false);
+                repository.save(session);
+                sessionCache.invalidate(session.getSessionId());
+            }
         } catch (Exception e) {
             // Thrown out of a scheduled task, it would cancel every later cleanup.
             logger.warn("[Fiber] Session cleanup failed: {}", e.getMessage());

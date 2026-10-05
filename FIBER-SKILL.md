@@ -560,7 +560,7 @@ server.setSessionService(new SessionService(sessionRepo));
 - `invalidateAllForUser(Object userId)`
 - `invalidateOtherSessions(Object userId, String keepSessionId)`
 - `touchSession(String sessionId)` — update lastAccessedAt
-- `cleanupExpired()` — deletes every session past its expiry, active or revoked; runs automatically every hour
+- `cleanupExpired()` - marks expired active sessions as inactive (rows are kept); runs automatically every hour
 
 ### Inject in Controller
 
@@ -907,7 +907,7 @@ Pre-cache at startup: `server.preloadDto()`.
 
 ```groovy
 dependencies {
-    implementation 'sh.fyz:Fiber:2.2.5'
+    implementation 'sh.fyz:Fiber:3.0.0'
 }
 ```
 
@@ -917,6 +917,6 @@ dependencies {
 <dependency>
     <groupId>sh.fyz</groupId>
     <artifactId>Fiber</artifactId>
-    <version>2.2.5</version>
+    <version>3.0.0</version>
 </dependency>
 ```

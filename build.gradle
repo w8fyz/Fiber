@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'sh.fyz'
-version = '2.2.5'
+version = '3.0.0'
 
 tasks.withType(JavaCompile).configureEach {
     // Any JDK 21+ can build; the bytecode and the JDK API used stay at Java 21.
