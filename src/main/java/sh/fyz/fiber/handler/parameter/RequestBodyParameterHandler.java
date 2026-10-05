@@ -12,9 +12,9 @@ import sh.fyz.fiber.validation.ValidationRegistry;
 import sh.fyz.fiber.validation.ValidationResult;
 
 import java.io.IOException;
+import java.io.StringWriter;
 import java.lang.reflect.Parameter;
 import java.util.regex.Matcher;
-import java.util.stream.Collectors;
 
 public class RequestBodyParameterHandler implements ParameterHandler {
 
@@ -29,7 +29,10 @@ public class RequestBodyParameterHandler implements ParameterHandler {
     public Object handle(Parameter parameter, HttpServletRequest request, HttpServletResponse response, Matcher pathMatcher) throws Exception {
         String body;
         try {
-            body = request.getReader().lines().collect(Collectors.joining());
+            // Read verbatim: joining lines would drop the line breaks between JSON tokens.
+            StringWriter writer = new StringWriter();
+            request.getReader().transferTo(writer);
+            body = writer.toString();
         } catch (IOException e) {
             throw new IllegalArgumentException("Could not read request body", e);
         }

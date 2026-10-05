@@ -37,7 +37,7 @@ public class RateLimitInterceptor {
             this.windowSeconds = rateLimit.unit().toSeconds(rateLimit.timeout());
             this.maxAttempts = rateLimit.attempts();
             this.message = rateLimit.message();
-            this.count = 1;
+            this.count = 0;
             this.windowStart = Instant.now();
         }
 
@@ -53,7 +53,7 @@ public class RateLimitInterceptor {
 
         private void resetIfExpired() {
             if (Instant.now().isAfter(windowStart.plusSeconds(windowSeconds))) {
-                count = 1;
+                count = 0;
                 windowStart = Instant.now();
             }
         }
@@ -111,7 +111,10 @@ public class RateLimitInterceptor {
     }
 
     public static long checkRateLimit(String identifier, Method method) {
-        RateLimit rateLimit = method.getAnnotation(RateLimit.class);
+        return checkRateLimit(identifier, method, resolveRateLimit(method));
+    }
+
+    public static long checkRateLimit(String identifier, Method method, RateLimit rateLimit) {
         if (rateLimit == null) return -1;
 
         String cacheKey = buildCacheKey(identifier, method, rateLimit);
@@ -122,18 +125,17 @@ public class RateLimitInterceptor {
                 throw new RateLimitExceededException(rateLimit.message(), info.retryAfterSeconds());
             }
         } else {
-            AttemptInfo existing = fixedAttempts.getIfPresent(cacheKey);
-            if (existing == null) {
-                fixedAttempts.put(cacheKey, new AttemptInfo(rateLimit));
-            } else {
-                existing.incrementAndCheck();
-            }
+            // Atomic get-or-create: concurrent first requests must share one counter.
+            fixedAttempts.get(cacheKey, k -> new AttemptInfo(rateLimit)).incrementAndCheck();
         }
         return -1;
     }
 
     public static void resetRateLimit(String identifier, Method method) {
-        RateLimit rateLimit = method.getAnnotation(RateLimit.class);
+        resetRateLimit(identifier, method, resolveRateLimit(method));
+    }
+
+    public static void resetRateLimit(String identifier, Method method, RateLimit rateLimit) {
         if (rateLimit == null) return;
 
         String cacheKey = buildCacheKey(identifier, method, rateLimit);
@@ -143,6 +145,12 @@ public class RateLimitInterceptor {
         } else {
             fixedAttempts.invalidate(cacheKey);
         }
+    }
+
+    /** Method-level {@code @RateLimit} wins over the class-level one. */
+    public static RateLimit resolveRateLimit(Method method) {
+        RateLimit rateLimit = method.getAnnotation(RateLimit.class);
+        return rateLimit != null ? rateLimit : method.getDeclaringClass().getAnnotation(RateLimit.class);
     }
 
     /** Visible for testing -- clear all tracked state. */

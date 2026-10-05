@@ -73,4 +73,26 @@ class HttpUtilTest {
         HttpServletRequest r = mockRequest("10.0.0.1", "   ", null);
         assertEquals("10.0.0.1", HttpUtil.getClientIpAddress(r));
     }
+
+    @Test
+    void hostNamesAreNeverResolvedAsClientIp() {
+        HttpUtil.setTrustedProxies(Set.of("10.0.0.1"));
+        // "localhost" resolves on every machine: it must still be rejected, not looked up.
+        HttpServletRequest r = mockRequest("10.0.0.1", "localhost", "localhost");
+        assertEquals("10.0.0.1", HttpUtil.getClientIpAddress(r));
+    }
+
+    @Test
+    void nonAsciiDigitsCannotSmuggleAHostName() {
+        HttpUtil.setTrustedProxies(Set.of("10.0.0.1"));
+        HttpServletRequest r = mockRequest("10.0.0.1", null, "\uFF11:attacker.example");
+        assertEquals("10.0.0.1", HttpUtil.getClientIpAddress(r));
+    }
+
+    @Test
+    void bracketedIpv6IsAccepted() {
+        HttpUtil.setTrustedProxies(Set.of("10.0.0.1"));
+        HttpServletRequest r = mockRequest("10.0.0.1", null, "[2001:db8::1]");
+        assertEquals("[2001:db8::1]", HttpUtil.getClientIpAddress(r));
+    }
 }

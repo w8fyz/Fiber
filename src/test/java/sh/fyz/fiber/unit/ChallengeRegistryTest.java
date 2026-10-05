@@ -96,4 +96,30 @@ class ChallengeRegistryTest {
         HttpServletResponse resp = Mockito.mock(HttpServletResponse.class);
         assertNull(registry.validateChallenge("c2", "42", req, resp));
     }
+
+    @Test
+    void completedChallengeCannotBeReplayed() {
+        ChallengeRegistry registry = new ChallengeRegistry();
+        registry.createChallenge(new TestChallenge("c3", "42"), null);
+
+        HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        HttpServletResponse resp = Mockito.mock(HttpServletResponse.class);
+        assertEquals("done", registry.validateChallenge("c3", "42", req, resp).getBody());
+        assertThrows(ChallengeNotFoundException.class,
+                () -> registry.validateChallenge("c3", "42", req, resp));
+    }
+
+    @Test
+    void challengeIsDiscardedAfterTooManyFailures() {
+        ChallengeRegistry registry = new ChallengeRegistry();
+        registry.createChallenge(new TestChallenge("c4", "42"), null);
+
+        HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        HttpServletResponse resp = Mockito.mock(HttpServletResponse.class);
+        for (int i = 0; i < ChallengeRegistry.MAX_FAILED_ATTEMPTS; i++) {
+            assertEquals("failed", registry.validateChallenge("c4", "bad", req, resp).getBody());
+        }
+        assertThrows(ChallengeNotFoundException.class,
+                () -> registry.validateChallenge("c4", "42", req, resp));
+    }
 }

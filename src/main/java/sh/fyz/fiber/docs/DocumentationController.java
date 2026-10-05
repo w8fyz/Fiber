@@ -204,8 +204,7 @@ public class DocumentationController {
     }
 
     private byte[] readResource(String resourcePath) {
-        try {
-            InputStream inputStream = getClass().getClassLoader().getResourceAsStream(resourcePath);
+        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
             if (inputStream == null) {
                 logger.warn("Resource not found: {}", resourcePath);
                 return null;

@@ -1,5 +1,6 @@
 package sh.fyz.fiber.unit;
 
+import sh.fyz.fiber.validation.Min;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sh.fyz.fiber.validation.NotBlank;
@@ -46,5 +47,21 @@ class ValidationHierarchyTest {
         c.name = "Alice";
         c.email = "a@b.test";
         assertTrue(ValidationRegistry.validate(c).isValid());
+    }
+
+    static class Adult {
+        @Min(18)
+        public int age;
+    }
+
+    @Test
+    void minUsesTheAnnotationValue() {
+        Adult a = new Adult();
+        a.age = 17;
+        ValidationResult result = ValidationRegistry.validate(a);
+        assertFalse(result.isValid(), "17 must fail @Min(18)");
+        assertEquals("Value must be greater than or equal to 18", result.getFirstError());
+        a.age = 18;
+        assertTrue(ValidationRegistry.validate(a).isValid());
     }
 }

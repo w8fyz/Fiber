@@ -7,6 +7,7 @@ import sh.fyz.fiber.core.authentication.Authenticator;
 import sh.fyz.fiber.core.authentication.AuthScheme;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.JwtUtil;
+import sh.fyz.fiber.util.HttpUtil;
 
 public class BearerAuthenticator implements Authenticator {
     @Override
@@ -19,7 +20,7 @@ public class BearerAuthenticator implements Authenticator {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
-            Claims claims = JwtUtil.validateToken(token, request.getRemoteAddr(), request.getHeader("User-Agent"));
+            Claims claims = JwtUtil.validateToken(token, HttpUtil.getClientIpAddress(request), request.getHeader("User-Agent"));
             if (claims != null) {
                 if (!SessionValidator.validate(claims)) {
                     return null;

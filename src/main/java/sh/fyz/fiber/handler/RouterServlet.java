@@ -5,13 +5,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.EndpointRegistry;
-import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.core.log.LogContext;
-import sh.fyz.fiber.core.security.processors.RateLimitProcessor;
-import sh.fyz.fiber.core.security.annotations.AuditLog;
-import sh.fyz.fiber.core.security.logging.AuditLogProcessor;
 import sh.fyz.fiber.core.security.logging.AuditContext;
 import sh.fyz.fiber.core.session.SessionContext;
 
@@ -121,31 +117,13 @@ public class RouterServlet extends HttpServlet {
                 }
             }
 
-            Method method = matchedEndpoint.getMethod();
-            Object[] parameters = matchedEndpoint.getParameters();
-
             if (logger.isDebugEnabled()) {
+                Method method = matchedEndpoint.getMethod();
                 logger.debug("dispatch {} {} -> {}.{}", requestMethod, requestUri,
                         method.getDeclaringClass().getSimpleName(), method.getName());
             }
 
-            Object rateLimitResult = RateLimitProcessor.process(method, parameters, req);
-            if (rateLimitResult != null) {
-                ResponseEntity<?> response = (ResponseEntity<?>) rateLimitResult;
-                response.write(req, resp);
-                return;
-            }
-
-            Object result = matchedEndpoint.handleRequest(req, resp, matchedMatcher);
-
-            AuditLog auditLog = method.getAnnotation(AuditLog.class);
-            if (auditLog != null) {
-                AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, parameters, result);
-            }
-
-            if (resp.getStatus() == 200) {
-                RateLimitProcessor.onSuccess(method, req);
-            }
+            matchedEndpoint.handleRequest(req, resp, matchedMatcher);
         } catch (IllegalArgumentException e) {
             logger.debug("Bad request: {} {} — {}", req.getMethod(), req.getRequestURI(), e.getMessage());
             if (!resp.isCommitted()) {

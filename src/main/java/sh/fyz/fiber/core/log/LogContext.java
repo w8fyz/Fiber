@@ -31,7 +31,8 @@ public final class LogContext {
     public static Map<String, String> snapshot() {
         RequestContext ctx = CTX.get();
         if (ctx == null || ctx.mdc().isEmpty()) return null;
-        return Collections.unmodifiableMap(ctx.mdc());
+        // Copy: the event is formatted on the dispatcher thread while the request keeps running.
+        return Collections.unmodifiableMap(new HashMap<>(ctx.mdc()));
     }
 
     public static String newRequestId() {

@@ -13,9 +13,9 @@ public class MinValidator implements Validator<Number> {
             return ValidationResult.valid();
         }
 
-        double minValue = 0.0; // Default value, can be overridden by actual annotation
-        if (value.doubleValue() < minValue) {
-            return ValidationResult.invalid("Value must be greater than or equal to " + minValue);
+        Min min = (Min) annotation;
+        if (value.doubleValue() < min.value()) {
+            return ValidationResult.invalid(min.message().replace("{value}", String.valueOf(min.value())));
         }
 
         return ValidationResult.valid();

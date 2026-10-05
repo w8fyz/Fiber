@@ -1,5 +1,8 @@
 package sh.fyz.fiber.core;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.JwtParser;
@@ -12,11 +15,11 @@ import sh.fyz.fiber.core.authentication.entities.UserAuth;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
@@ -30,7 +33,11 @@ public class JwtUtil {
 
     private static final AtomicReference<State> STATE = new AtomicReference<>();
 
-    private static final Set<String> REVOKED_REFRESH_TOKENS = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** Revoked refresh token -> its expiry (epoch ms); each entry is dropped once the token expires. */
+    private static final Cache<String, Long> REVOKED_REFRESH_TOKENS = Caffeine.newBuilder()
+            .expireAfter(Expiry.<String, Long>creating((token, expiresAt) ->
+                    Duration.ofMillis(Math.max(0, expiresAt - System.currentTimeMillis()))))
+            .build();
 
     private record State(SecretKey key, JwtParser parser, long tokenValidity, long refreshTokenValidity) {}
 
@@ -131,7 +138,7 @@ public class JwtUtil {
 
     public static boolean validateRefreshToken(String token, String ipAddress, String userAgent) {
         try {
-            if (REVOKED_REFRESH_TOKENS.contains(token)) {
+            if (REVOKED_REFRESH_TOKENS.getIfPresent(token) != null) {
                 return false;
             }
             Claims claims = extractAllClaims(token);
@@ -160,17 +167,29 @@ public class JwtUtil {
     /**
      * Mark a refresh token as revoked. Subsequent calls to
      * {@link #validateRefreshToken(String, String, String)} will return {@code false}.
-     * The in-memory set is bounded by the refresh TTL — callers may prune periodically.
+     * Only genuine, unexpired tokens are remembered, and only until they expire, so
+     * arbitrary cookie values cannot grow the set.
      */
     public static void revokeRefreshToken(String token) {
-        if (token != null && !token.isBlank()) {
-            REVOKED_REFRESH_TOKENS.add(token);
+        if (token == null || token.isBlank()) {
+            return;
+        }
+        Claims claims;
+        try {
+            claims = extractAllClaims(token);
+        } catch (Exception e) {
+            // Forged, malformed or already expired: it can never validate anyway.
+            return;
+        }
+        Date expiration = claims.getExpiration();
+        if (expiration != null) {
+            REVOKED_REFRESH_TOKENS.put(token, expiration.getTime());
         }
     }
 
     /** Visible for testing. */
     public static void clearRevokedRefreshTokens() {
-        REVOKED_REFRESH_TOKENS.clear();
+        REVOKED_REFRESH_TOKENS.invalidateAll();
     }
 
     private static Claims extractAllClaims(String token) {

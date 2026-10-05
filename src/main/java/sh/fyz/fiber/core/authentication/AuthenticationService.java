@@ -34,7 +34,7 @@ public abstract class AuthenticationService<T extends UserAuth> {
         this.cookieConfig = new AuthCookieConfig()
                 .setSameSite(FiberServer.get().isDev() ? SameSitePolicy.LAX : SameSitePolicy.STRICT)
                 .setSecure(!FiberServer.get().isDev());
-        this.userCache = buildDefaultCache();
+        this.userCache = buildUserCache();
         IdentifierIndexCheck.warnIfUnindexed(getUserClass());
     }
 
@@ -42,7 +42,7 @@ public abstract class AuthenticationService<T extends UserAuth> {
         this.userRepository = userRepository;
         this.refreshTokenPath = authEndpoint;
         this.cookieConfig = cookieConfig;
-        this.userCache = buildDefaultCache();
+        this.userCache = buildUserCache();
         IdentifierIndexCheck.warnIfUnindexed(getUserClass());
     }
 

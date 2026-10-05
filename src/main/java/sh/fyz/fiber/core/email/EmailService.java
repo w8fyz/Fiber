@@ -14,10 +14,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class EmailService {
 
     private static final FiberLogger logger = FiberLog.get(EmailService.class);
+
+    /** SMTP I/O blocks: keep it off the common ForkJoinPool shared by the whole JVM. */
+    private static final ExecutorService SEND_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private final jakarta.mail.Session session;
     private final String from;
@@ -75,7 +80,7 @@ public class EmailService {
     }
 
     public CompletableFuture<Void> sendEmail(Email email) {
-        return CompletableFuture.<Void>runAsync(() -> {
+        return CompletableFuture.runAsync(() -> {
             try {
                 // Process template if specified
                 if (email.getTemplatePath() != null) {
@@ -128,7 +133,7 @@ public class EmailService {
                 logger.error("Failed to send email to {}", email.getTo(), e);
                 throw new EmailDeliveryException("Failed to send email", e);
             }
-        }).whenComplete((v, ex) -> {
+        }, SEND_EXECUTOR).whenComplete((v, ex) -> {
             if (ex != null) {
                 logger.error("Email delivery future completed exceptionally", ex);
             }
@@ -160,17 +165,8 @@ public class EmailService {
             }
         }
         
-        // Process the template with variables
+        // Process the template with variables (CSS is inlined once, by sendEmail)
         String htmlContent = EmailTemplateEngine.processTemplateFile(templatePath, variables);
-        // Convert CSS to inline styles if enabled
-        if (convertCssToInline) {
-            try {
-                htmlContent = EmailCssUtils.convertCssToInline(htmlContent);
-            } catch (Exception e) {
-                logger.warn("Failed to inline CSS for template {} — sending raw HTML", templatePath, e);
-            }
-        }
-        
         email.setHtmlContent(htmlContent);
     }
 } 

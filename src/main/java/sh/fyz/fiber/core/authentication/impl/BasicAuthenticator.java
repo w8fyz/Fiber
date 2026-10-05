@@ -7,7 +7,6 @@ import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationAuthenticator;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Base64;
 
 public class BasicAuthenticator implements OAuth2ApplicationAuthenticator {
@@ -19,7 +18,7 @@ public class BasicAuthenticator implements OAuth2ApplicationAuthenticator {
             String base64Credentials = authHeader.substring("Basic ".length()).trim();
             String credentials;
             try {
-                credentials = new String(Base64.getDecoder().decode(base64Credentials));
+                credentials = new String(Base64.getDecoder().decode(base64Credentials), StandardCharsets.UTF_8);
             } catch (Exception e) {
                 return null;
             }
@@ -28,11 +27,11 @@ public class BasicAuthenticator implements OAuth2ApplicationAuthenticator {
             if (values.length == 2) {
                 String clientId = values[0];
                 String clientSecret = values[1];
-                OAuth2Client appInfo = FiberServer.get().getOauthClientService().getClient(clientId);
-                if (appInfo != null && MessageDigest.isEqual(
-                        appInfo.getClientSecret().getBytes(StandardCharsets.UTF_8),
-                        clientSecret.getBytes(StandardCharsets.UTF_8))) {
-                    return new OAuth2ApplicationInfo(appInfo.getClientId(), appInfo.getClientSecret());
+                // Stored secrets are BCrypt hashes: verify through the client service.
+                OAuth2Client appInfo = FiberServer.get().getOauthClientService()
+                        .getClientByCredentials(clientId, clientSecret);
+                if (appInfo != null) {
+                    return new OAuth2ApplicationInfo(appInfo.getClientId(), clientSecret);
                 }
             }
         }

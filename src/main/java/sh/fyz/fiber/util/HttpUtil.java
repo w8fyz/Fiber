@@ -9,6 +9,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * IP resolution helper aware of trusted proxies.
@@ -94,8 +95,30 @@ public class HttpUtil {
         return remoteAddr;
     }
 
+    private static final Pattern IPV4 = Pattern.compile(
+            "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$");
+
+    /**
+     * Accepts IP literals only. {@link InetAddress#getByName} must never see a host name
+     * here: it would run a blocking DNS lookup on a client-supplied header.
+     */
     private static boolean isValidIp(String value) {
-        if (value == null || value.isBlank() || "unknown".equalsIgnoreCase(value)) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        if (value.indexOf(':') < 0) {
+            return IPV4.matcher(value).matches();
+        }
+        // The JDK only parses the value as an IPv6 literal (never resolving it) when it
+        // starts with a hex digit or ':'; anything else would go to name resolution.
+        String literal = value.startsWith("[") && value.endsWith("]")
+                ? value.substring(1, value.length() - 1) : value;
+        if (literal.isEmpty()) {
+            return false;
+        }
+        char first = literal.charAt(0);
+        boolean asciiHex = (first >= '0' && first <= '9') || (first >= 'a' && first <= 'f') || (first >= 'A' && first <= 'F');
+        if (first != ':' && !asciiHex) {
             return false;
         }
         try {

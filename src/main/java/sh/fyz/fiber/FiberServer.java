@@ -228,6 +228,7 @@ public class FiberServer {
     public Challenge registerChallenge(Challenge challenge, ChallengeCallback callback) {
         if (!challengeControllerRegistered) {
             registerController(new ChallengeController());
+            sharedExecutor.scheduleAtFixedRate(challengeRegistry::cleanupExpiredChallenges, 5, 5, TimeUnit.MINUTES);
             challengeControllerRegistered = true;
         }
         return challengeRegistry.createChallenge(challenge, callback);
