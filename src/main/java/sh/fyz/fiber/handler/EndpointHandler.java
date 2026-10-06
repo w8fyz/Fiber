@@ -10,8 +10,15 @@ import sh.fyz.fiber.annotations.security.AuthType;
 import sh.fyz.fiber.annotations.security.NoCors;
 import sh.fyz.fiber.annotations.security.NoCSRF;
 import sh.fyz.fiber.core.ErrorResponse;
+import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.authentication.AuthScheme;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2ApplicationInfo;
+import sh.fyz.fiber.core.security.annotations.AuditLog;
+import sh.fyz.fiber.core.security.annotations.RateLimit;
+import sh.fyz.fiber.core.security.interceptors.RateLimitInterceptor;
+import sh.fyz.fiber.core.security.logging.AuditLogProcessor;
+import sh.fyz.fiber.core.security.processors.RateLimitProcessor;
+import sh.fyz.fiber.handler.parameter.ParameterHandler;
 import sh.fyz.fiber.middleware.Middleware;
 
 import java.io.IOException;
@@ -28,6 +35,11 @@ import java.util.Set;
 public class EndpointHandler {
     private final Object controller;
     private final Method method;
+    private final Parameter[] parameters;
+    private final RateLimit rateLimit;
+    private final AuditLog auditLog;
+    /** Resolved on first use, so handlers registered after the controller are still seen. */
+    private volatile ParameterHandler[] parameterHandlers;
     private final Pattern pathPattern;
     private final int pathVariableCount;
 
@@ -38,6 +50,9 @@ public class EndpointHandler {
     public EndpointHandler(Object controller, Method method, List<Middleware> globalMiddleware, String[] requiredRoles) {
         this.controller = controller;
         this.method = method;
+        this.parameters = method.getParameters();
+        this.rateLimit = RateLimitInterceptor.resolveRateLimit(method);
+        this.auditLog = method.getAnnotation(AuditLog.class);
 
         this.noCors = method.isAnnotationPresent(NoCors.class);
         boolean noCsrf = method.isAnnotationPresent(NoCSRF.class);
@@ -106,14 +121,39 @@ public class EndpointHandler {
     }
 
     public Object handleRequest(HttpServletRequest req, HttpServletResponse resp, Matcher precomputedMatcher) throws ServletException, IOException {
+        // IP-keyed limits run before authentication so failed attempts are counted too.
+        if (rateLimit != null && !rateLimit.perUser() && rejectRateLimited(req, resp)) {
+            return null;
+        }
+
+        Invocation invocation = invoke(req, resp, precomputedMatcher);
+        if (invocation == Invocation.RATE_LIMITED) {
+            return null;
+        }
+
+        if (auditLog != null) {
+            AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, invocation.args(), invocation.result());
+        }
+        if (rateLimit != null && resp.getStatus() == HttpServletResponse.SC_OK) {
+            RateLimitProcessor.reset(rateLimit, method, invocation.args(), req);
+        }
+        return invocation.result();
+    }
+
+    private Invocation invoke(HttpServletRequest req, HttpServletResponse resp, Matcher precomputedMatcher) throws ServletException, IOException {
         SecurityResult security = securityPipeline.execute(req, resp);
         if (!security.shouldProceed()) {
-            return null;
+            return Invocation.NONE;
+        }
+
+        // Per-user limits need the identity resolved by the security pipeline.
+        if (rateLimit != null && rateLimit.perUser() && rejectRateLimited(req, resp)) {
+            return Invocation.RATE_LIMITED;
         }
 
         for (Middleware middleware : globalMiddleware) {
             if (!middleware.handle(req, resp)) {
-                return null;
+                return Invocation.NONE;
             }
         }
 
@@ -123,21 +163,45 @@ public class EndpointHandler {
             matcher = pathPattern.matcher(path);
             if (!matcher.matches()) {
                 ErrorResponse.send(resp, path, HttpServletResponse.SC_NOT_FOUND, "Path not found");
-                return null;
+                return Invocation.NONE;
             }
         }
 
         try {
-            Object[] args = ParameterResolver.resolve(method, req, resp, matcher, security.getAuthenticatedUser());
+            Object[] args = ParameterResolver.resolve(parameters, parameterHandlers(), req, resp, matcher,
+                    security.getAuthenticatedUser(), security.getAuthenticatedApp());
             Object result = method.invoke(controller, args);
             ResponseWriter.write(result, req, resp);
-            return result;
+            return new Invocation(args, result);
         } catch (ParameterResolver.ResolveException e) {
             ErrorResponse.send(resp, path, e.getStatusCode(), e.getMessage());
-            return null;
+            return Invocation.NONE;
         } catch (Exception e) {
             throw new ServletException("Failed to invoke endpoint method", e);
         }
+    }
+
+    private boolean rejectRateLimited(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        ResponseEntity<?> tooManyRequests = RateLimitProcessor.check(rateLimit, method, null, req);
+        if (tooManyRequests == null) {
+            return false;
+        }
+        tooManyRequests.write(req, resp);
+        return true;
+    }
+
+    private ParameterHandler[] parameterHandlers() {
+        ParameterHandler[] handlers = parameterHandlers;
+        if (handlers == null) {
+            handlers = ParameterResolver.findHandlers(parameters);
+            parameterHandlers = handlers;
+        }
+        return handlers;
+    }
+
+    private record Invocation(Object[] args, Object result) {
+        static final Invocation NONE = new Invocation(null, null);
+        static final Invocation RATE_LIMITED = new Invocation(null, null);
     }
 
     public Method getMethod() {
@@ -145,7 +209,7 @@ public class EndpointHandler {
     }
 
     public Parameter[] getParameters() {
-        return method.getParameters();
+        return parameters.clone();
     }
 
     public boolean matchesPath(String requestUri) {

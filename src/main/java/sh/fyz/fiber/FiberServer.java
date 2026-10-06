@@ -1,8 +1,11 @@
 package sh.fyz.fiber;
 
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
@@ -23,6 +26,7 @@ import sh.fyz.fiber.core.security.logging.AuditLogService;
 import sh.fyz.fiber.core.upload.FileUploadManager;
 import sh.fyz.fiber.docs.DocumentationController;
 import sh.fyz.fiber.handler.FiberErrorHandler;
+import sh.fyz.fiber.handler.FiberServerErrorHandler;
 import sh.fyz.fiber.middleware.Middleware;
 import sh.fyz.fiber.middleware.impl.CsrfMiddleware;
 import sh.fyz.fiber.validation.ValidationInitializer;
@@ -49,6 +53,7 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -86,6 +91,12 @@ public class FiberServer {
     private int fileSizeThreshold = 1_000_000;
     private boolean started = false;
     private final ScheduledExecutorService sharedExecutor;
+    /**
+     * Audit records are processed off the request, two at a time in arrival order, on their own
+     * workers so a slow AuditLogService does not hold back the timers of the shared executor.
+     */
+    private final ExecutorService auditExecutor = Executors.newFixedThreadPool(2,
+            Thread.ofVirtual().name("fiber-audit-", 0).factory());
     private boolean defaultLogHandlerDisabled = false;
 
     public FiberConfig getConfig() {
@@ -109,9 +120,13 @@ public class FiberServer {
         QueuedThreadPool threadPool = new QueuedThreadPool();
         threadPool.setVirtualThreadsExecutor(Executors.newVirtualThreadPerTaskExecutor());
         this.server = new Server(threadPool);
-        org.eclipse.jetty.server.ServerConnector connector = new org.eclipse.jetty.server.ServerConnector(server);
+        HttpConfiguration httpConfig = new HttpConfiguration();
+        // Never advertise "Jetty(x.y.z)", including on errors Jetty answers before Fiber's filters run.
+        httpConfig.setSendServerVersion(false);
+        ServerConnector connector = new ServerConnector(server, new HttpConnectionFactory(httpConfig));
         connector.setPort(port);
         server.addConnector(connector);
+        server.setErrorHandler(new FiberServerErrorHandler());
 
         this.context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         this.globalMiddleware = new CopyOnWriteArrayList<>();
@@ -220,6 +235,7 @@ public class FiberServer {
     public Challenge registerChallenge(Challenge challenge, ChallengeCallback callback) {
         if (!challengeControllerRegistered) {
             registerController(new ChallengeController());
+            sharedExecutor.scheduleAtFixedRate(challengeRegistry::cleanupExpiredChallenges, 5, 5, TimeUnit.MINUTES);
             challengeControllerRegistered = true;
         }
         return challengeRegistry.createChallenge(challenge, callback);
@@ -421,13 +437,19 @@ public class FiberServer {
             oauthClientService.shutdown();
         }
         sharedExecutor.shutdown();
+        auditExecutor.shutdown();
         try {
             if (!sharedExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
                 logger.warn("Shared executor did not terminate within 10s — forcing shutdown");
                 sharedExecutor.shutdownNow();
             }
+            if (!auditExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                logger.warn("Audit executor did not terminate within 10s — forcing shutdown");
+                auditExecutor.shutdownNow();
+            }
         } catch (InterruptedException e) {
             sharedExecutor.shutdownNow();
+            auditExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
         started = false;
@@ -481,6 +503,11 @@ public class FiberServer {
         return this;
     }
 
+    /** @return the largest request body accepted, in bytes; -1 for no limit. */
+    public long getMaxRequestSize() {
+        return maxRequestSize;
+    }
+
     public FiberServer setFileSizeThreshold(int fileSizeThreshold) {
         this.fileSizeThreshold = fileSizeThreshold;
         return this;
@@ -494,5 +521,10 @@ public class FiberServer {
      */
     public ScheduledExecutorService getSharedExecutor() {
         return sharedExecutor;
+    }
+
+    /** Executor running {@code @AuditLog} processing; drained by {@link #stop()}. */
+    public ExecutorService getAuditExecutor() {
+        return auditExecutor;
     }
 }

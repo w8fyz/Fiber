@@ -9,7 +9,7 @@ description: >-
 
 # Fiber Framework
 
-Fiber is a Java 21+ RESTful API framework built on Jetty 11 with annotation-driven routing, built-in JWT authentication, OAuth2, server-side sessions, CORS, CSRF, rate limiting, validation, file uploads, and email templating.
+Fiber is a Java 21+ RESTful API framework built on Jetty 12 (Jakarta EE 11, Servlet 6.1) with annotation-driven routing, built-in JWT authentication, OAuth2, server-side sessions, CORS, CSRF, rate limiting, validation, file uploads, and email templating.
 
 ## Project Structure
 
@@ -112,7 +112,8 @@ src/main/java/sh/fyz/fiber/
 │       └── UploadedFile.java                   # File wrapper: moveTo, cleanup, getInputStream
 ├── handler/
 │   ├── EndpointHandler.java                    # Per-route handler: security → params → invoke
-│   ├── FiberErrorHandler.java                  # Jetty error handler (JSON)
+│   ├── FiberErrorHandler.java                  # Servlet-context error handler (JSON)
+│   ├── FiberServerErrorHandler.java            # Server-level error handler (bad URI, headers...) (JSON)
 │   ├── ParameterResolver.java                  # Resolves method arguments from request
 │   ├── ResponseWriter.java                     # Writes result to HttpServletResponse (writeValueAsBytes)
 │   ├── RouterServlet.java                      # O(1) static route lookup, linear scan for dynamic routes
@@ -464,6 +465,10 @@ public class MyOAuth2Service extends OAuth2AuthenticationService<User> {
 }
 ```
 
+**Login CSRF protection**
+
+Start the flow with `oauthService.getAuthorizationUrl(providerId, redirectUri, response)`: it binds the `state` to the browser with a short-lived `oauth_state` cookie (HttpOnly, SameSite=Lax), and `handleCallback` rejects a callback that does not carry it. The callback must reach the server as a top-level GET redirect with the browser's cookies (not `response_mode=form_post`). The two-argument `getAuthorizationUrl(providerId, redirectUri)` is kept for compatibility but does not bind the state.
+
 **Token persistence & rate-limit hygiene**
 
 Providers like Discord rate-limit the `/oauth2/token` endpoint hard. To avoid exhausting the app's quota:
@@ -555,7 +560,7 @@ server.setSessionService(new SessionService(sessionRepo));
 - `invalidateAllForUser(Object userId)`
 - `invalidateOtherSessions(Object userId, String keepSessionId)`
 - `touchSession(String sessionId)` — update lastAccessedAt
-- `cleanupExpired()` — runs automatically every hour
+- `cleanupExpired()` - marks expired active sessions as inactive (rows are kept); runs automatically every hour
 
 ### Inject in Controller
 
@@ -870,8 +875,9 @@ Pre-cache at startup: `server.preloadDto()`.
 ### Lifecycle
 - Always call `server.start()` after all configuration is done.
 - `FiberServer.get()` is available after the constructor returns (singleton).
-- `stop()` performs graceful shutdown: stops Jetty and cleans up FileUploadManager.
-- Register authenticators on `server.getAuthResolver()` (Cookie + Bearer are registered by default).
+- `stop()` stops Jetty (in-flight requests are not drained), then cleans up FileUploadManager, the OAuth2 client service and the shared executor.
+- Register authenticators on `server.getAuthResolver()` before `start()`: none are registered by default, and an authenticated request fails with "No authenticators registered" until `CookieAuthenticator`/`BearerAuthenticator` are added.
+- Jetty 12 rejects ambiguous URIs (e.g. an encoded slash `%2F` or an encoded percent `%25` in a path) with 400 before they reach Fiber. Every error Jetty or the servlet layer renders is JSON `{url, status, message}` and never names the Jetty version.
 - `registerController(Class<?>)` requires a no-arg constructor; `registerController(Object)` uses the provided instance.
 - Duplicate endpoint registrations are logged as warnings and silently ignored.
 
@@ -901,7 +907,7 @@ Pre-cache at startup: `server.preloadDto()`.
 
 ```groovy
 dependencies {
-    implementation 'sh.fyz:Fiber:2.1.2'
+    implementation 'sh.fyz:Fiber:3.0.0'
 }
 ```
 
@@ -911,6 +917,6 @@ dependencies {
 <dependency>
     <groupId>sh.fyz</groupId>
     <artifactId>Fiber</artifactId>
-    <version>2.1.2</version>
+    <version>3.0.0</version>
 </dependency>
 ```

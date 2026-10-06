@@ -37,12 +37,9 @@ public class EmailCssUtils {
             Map<String, Map<String, String>> cssRules = parseCssRules(cssContent);
             
             // Apply CSS rules to HTML elements
-            String result = applyCssRules(htmlContent, cssRules);
-            
-            // Remove the style tag
-            result = removeStyleTag(result);
-            
-            return result;
+            // The <style> block is kept: clients that support it still need the rules that cannot be
+            // inlined (media queries, pseudo-classes).
+            return applyCssRules(htmlContent, cssRules);
         } catch (Exception e) {
             LOGGER.warn("Failed to inline CSS into HTML email body", e);
             return htmlContent;
@@ -122,7 +119,8 @@ public class EmailCssUtils {
             for (Map.Entry<String, String> prop : properties.entrySet()) {
                 styleBuilder.append(prop.getKey()).append(":").append(prop.getValue()).append(";");
             }
-            String styleString = styleBuilder.toString();
+            // Double quotes (font-family: "Helvetica Neue") would close the style="..." attribute early.
+            String styleString = styleBuilder.toString().replace('"', '\'');
             
             // Apply styles to elements matching the selector
             if (selector.startsWith(".")) {
@@ -151,14 +149,14 @@ public class EmailCssUtils {
      * @return The HTML content with styles applied
      */
     private static String applyClassStyles(String htmlContent, String className, String styleString) {
-        Pattern classPattern = Pattern.compile("class=[\"']([^\"']*\\b" + Pattern.quote(className) + "\\b[^\"']*)[\"']");
+        Pattern classPattern = Pattern.compile("class=[\"']([^\"']*(?<![\\w-])" + Pattern.quote(className) + "(?![\\w-])[^\"']*)[\"']");
         Matcher matcher = classPattern.matcher(htmlContent);
         
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
             String classAttr = matcher.group(1);
             String replacement = "class=\"" + classAttr + "\" style=\"" + styleString + "\"";
-            matcher.appendReplacement(result, replacement);
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(result);
         
@@ -180,7 +178,7 @@ public class EmailCssUtils {
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
             String replacement = "id=\"" + id + "\" style=\"" + styleString + "\"";
-            matcher.appendReplacement(result, replacement);
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(result);
         
@@ -206,21 +204,11 @@ public class EmailCssUtils {
             
             if (attributes == null || !attributes.contains("style=")) {
                 String replacement = "<" + tagName + (attributes != null ? attributes : "") + " style=\"" + styleString + "\">";
-                matcher.appendReplacement(result, replacement);
+                matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
             }
         }
         matcher.appendTail(result);
         
         return result.toString();
-    }
-    
-    /**
-     * Removes the style tag from the HTML content.
-     * 
-     * @param htmlContent The HTML content
-     * @return The HTML content with the style tag removed
-     */
-    private static String removeStyleTag(String htmlContent) {
-        return htmlContent.replaceAll("<style[^>]*>.*?</style>", "");
     }
 } 

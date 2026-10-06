@@ -4,8 +4,10 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
 import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.architect.repositories.QueryBuilder;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.log.FiberLog;
+import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.util.HttpUtil;
 
 import sh.fyz.fiber.FiberServer;
@@ -18,6 +20,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class SessionService {
+
+    private static final FiberLogger logger = FiberLog.get(SessionService.class);
 
     private final GenericRepository<FiberSession> repository;
     private final long sessionTtlMillis;
@@ -71,12 +75,10 @@ public class SessionService {
         if (cached == null || cached.isEmpty()) {
             return null;
         }
+        // An inactive or expired session never becomes valid again: keep it cached so a client still
+        // holding its token does not query the database on every request.
         FiberSession session = cached.get();
-        if (session == null || !session.isValid()) {
-            sessionCache.invalidate(sessionId);
-            return null;
-        }
-        return session;
+        return session.isValid() ? session : null;
     }
 
     public List<FiberSession> getUserSessions(Object userId) {
@@ -133,17 +135,24 @@ public class SessionService {
         }
     }
 
+    /**
+     * Marks every active session past its expiry as inactive. Rows are kept, so the session history stays
+     * available; only the expired active sessions are loaded, not the whole table.
+     */
     public void cleanupExpired() {
-        List<FiberSession> expired = repository.query()
-                .where("active", true)
-                .findAll()
-                .stream()
-                .filter(FiberSession::isExpired)
-                .toList();
-        for (FiberSession session : expired) {
-            session.setActive(false);
-            repository.save(session);
-            sessionCache.invalidate(session.getSessionId());
+        try {
+            List<FiberSession> expired = repository.query()
+                    .where("active", true)
+                    .where("expiresAt", QueryBuilder.Operator.LT, System.currentTimeMillis())
+                    .findAll();
+            for (FiberSession session : expired) {
+                session.setActive(false);
+                repository.save(session);
+                sessionCache.invalidate(session.getSessionId());
+            }
+        } catch (Exception e) {
+            // Thrown out of a scheduled task, it would cancel every later cleanup.
+            logger.warn("[Fiber] Session cleanup failed: {}", e.getMessage());
         }
     }
 

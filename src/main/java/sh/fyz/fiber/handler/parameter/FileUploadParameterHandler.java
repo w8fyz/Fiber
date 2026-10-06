@@ -47,6 +47,11 @@ public class FileUploadParameterHandler implements ParameterHandler {
 
             Part filePart = request.getPart(parameter.getName());
             validateFilePart(filePart, annotation);
+            // totalChunks was fixed from a first part of at most maxSize: capping each chunk keeps the
+            // file within totalChunks * maxChunkSize (under maxSize + maxChunkSize), not totalChunks * maxSize.
+            if (annotation.maxChunkSize() > 0 && filePart.getSize() > annotation.maxChunkSize()) {
+                throw new IllegalArgumentException("Chunk exceeds maximum allowed chunk size");
+            }
 
             existingFile.addChunk(filePart, chunkIndex, totalChunks);
             return existingFile;

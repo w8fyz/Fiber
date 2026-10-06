@@ -10,6 +10,7 @@ import sh.fyz.fiber.annotations.params.RequestBody;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.ResponseEntity;
 import sh.fyz.fiber.core.challenge.Challenge;
+import sh.fyz.fiber.core.challenge.ChallengeNotFoundException;
 import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 
@@ -30,7 +31,13 @@ public class ChallengeController {
         if (challenge.isEmpty()) {
             return ResponseEntity.notFound("Challenge not found");
         }
-        ResponseEntity<Object> entity = challengeRegistry.validateChallenge(challengeID, response, request, httpResponse);
+        ResponseEntity<Object> entity;
+        try {
+            entity = challengeRegistry.validateChallenge(challengeID, response, request, httpResponse);
+        } catch (ChallengeNotFoundException e) {
+            // Consumed by a concurrent submission between the lookup and the validation.
+            return ResponseEntity.notFound("Challenge not found");
+        }
         if(entity != null) {
             return entity;
         }

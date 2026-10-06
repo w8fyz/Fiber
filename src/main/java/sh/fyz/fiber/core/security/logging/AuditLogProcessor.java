@@ -1,11 +1,14 @@
 package sh.fyz.fiber.core.security.logging;
 
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
+import sh.fyz.fiber.core.upload.UploadedFile;
 import sh.fyz.fiber.util.JsonUtil;
 import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.core.log.FiberLog;
@@ -46,8 +49,8 @@ public class AuditLogProcessor {
     private static ExecutorService resolveExecutor() {
         try {
             FiberServer server = FiberServer.get();
-            if (server != null && server.getSharedExecutor() != null) {
-                return server.getSharedExecutor();
+            if (server != null) {
+                return server.getAuditExecutor();
             }
         } catch (Exception e) {
             FiberLog.handleSilent(e);
@@ -66,11 +69,28 @@ public class AuditLogProcessor {
         Map<String, String[]> parameterMap = new HashMap<>(req.getParameterMap());
         String rawBody = (String) req.getAttribute(RAW_BODY_ATTRIBUTE);
         Map<String, Object> customData = AuditContext.getAll();
+        // The request/response objects are recycled once the request completes and are
+        // not serialisable anyway: never hand them to the asynchronous processing below.
+        // Uploads are summarised: serialising them would open their temp file (getInputStream).
+        Object[] loggedArgs = args == null ? null : args.clone();
+        if (loggedArgs != null) {
+            for (int i = 0; i < loggedArgs.length; i++) {
+                if (loggedArgs[i] instanceof ServletRequest || loggedArgs[i] instanceof ServletResponse) {
+                    loggedArgs[i] = null;
+                } else if (loggedArgs[i] instanceof UploadedFile file) {
+                    Map<String, Object> summary = new LinkedHashMap<>();
+                    summary.put("filename", file.getOriginalFilename());
+                    summary.put("contentType", file.getContentType());
+                    summary.put("size", file.getSize());
+                    loggedArgs[i] = summary;
+                }
+            }
+        }
 
         resolveExecutor().submit(() -> {
             try {
                 processAuditLog(timestamp, ip, userAgent, httpMethod, uri, status, parameterMap,
-                        rawBody, customData, auditLog, method, args, result);
+                        rawBody, customData, auditLog, method, loggedArgs, result);
             } catch (Exception e) {
                 logger.error("Failed to process audit log", e);
             }

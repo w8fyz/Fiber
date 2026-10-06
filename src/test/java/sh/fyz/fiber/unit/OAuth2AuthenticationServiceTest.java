@@ -5,6 +5,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sh.fyz.architect.repositories.GenericRepository;
+import jakarta.servlet.http.Cookie;
+import sh.fyz.fiber.core.authentication.AuthCookieConfig;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.authentication.oauth2.OAuth2AuthenticationService;
@@ -98,6 +100,34 @@ class OAuth2AuthenticationServiceTest {
         assertThrows(IllegalArgumentException.class, () ->
                 service.handleCallback("code", "bogus-state", "https://example.com/cb", request, response));
         verify(provider, never()).processCallback(anyString(), anyString());
+    }
+
+    @Test
+    void browserBoundStateRequiresTheStateCookie() {
+        when(authService.resolveFromRequest(request)).thenReturn(null);
+        when(authService.getCookieConfig()).thenReturn(new AuthCookieConfig());
+        when(provider.getAuthorizationUrl(anyString(), eq("https://example.com/cb")))
+                .thenAnswer(inv -> "https://auth/?state=" + inv.getArgument(0));
+
+        // A callback URL started by someone else: this browser has no matching cookie.
+        String url = service.getAuthorizationUrl("discord", "https://example.com/cb", response);
+        String foreignState = url.substring(url.indexOf("state=") + "state=".length());
+        verify(response).addHeader(eq("Set-Cookie"), startsWith("oauth_state=" + foreignState + ";"));
+        when(request.getCookies()).thenReturn(new Cookie[]{new Cookie("oauth_state", "other")});
+        assertThrows(IllegalArgumentException.class, () ->
+                service.handleCallback("code", foreignState, "https://example.com/cb", request, response));
+        verify(provider, never()).processCallback(anyString(), anyString());
+
+        // The browser that started the flow carries the cookie.
+        url = service.getAuthorizationUrl("discord", "https://example.com/cb", response);
+        String state = url.substring(url.indexOf("state=") + "state=".length());
+        when(request.getCookies()).thenReturn(new Cookie[]{new Cookie("oauth_state", state)});
+        when(provider.processCallback("code-ok", "https://example.com/cb")).thenReturn(new OAuth2CallbackResult(
+                Map.of("id", "discord-uid-1"), new OAuth2TokenResponse("access", "Bearer", 3600L, null, null)));
+        ResponseContext<UserAuth> ctx = service.handleCallback("code-ok", state,
+                "https://example.com/cb", request, response);
+        assertSame(createdUser, ctx.getResult());
+        verify(response).addHeader(eq("Set-Cookie"), startsWith("oauth_state=;"));
     }
 
     @Test

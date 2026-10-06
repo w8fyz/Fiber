@@ -103,4 +103,29 @@ public class RoutingTest extends IntegrationTestBase {
         HttpResponse<String> resp = get("/test/hello");
         assertEquals(200, resp.statusCode(), "Normalized path should work");
     }
+
+    @Test
+    @Order(12)
+    void testPathVariableIsDecoded() throws Exception {
+        HttpResponse<String> resp = get("/test/users/john%20doe");
+        assertEquals(200, resp.statusCode());
+        assertTrue(resp.body().contains("\"john doe\""), resp.body());
+
+        // A '+' in a path is a literal plus, not an encoded space.
+        HttpResponse<String> plus = get("/test/users/a+b");
+        assertEquals(200, plus.statusCode());
+        assertTrue(plus.body().contains("\"a+b\""), plus.body());
+    }
+
+    @Test
+    @Order(13)
+    void testMissingOptionalPrimitiveParamDefaultsInsteadOf500() throws Exception {
+        HttpResponse<String> resp = get("/test/optional-int");
+        assertEquals(200, resp.statusCode(), resp.body());
+        assertTrue(resp.body().contains("\"page\":0"), resp.body());
+
+        HttpResponse<String> given = get("/test/optional-int?page=3");
+        assertEquals(200, given.statusCode(), given.body());
+        assertTrue(given.body().contains("\"page\":3"), given.body());
+    }
 }

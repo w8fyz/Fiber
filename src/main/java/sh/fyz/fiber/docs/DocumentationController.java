@@ -166,11 +166,10 @@ public class DocumentationController {
         if (!checkDocsAccess(request, response)) {
             return ResponseEntity.forbidden("Documentation requires admin role in production".getBytes());
         }
-        String path = request.getPathInfo();
-        if (path == null || path.equals("/")) {
+        String path = staticResourcePath(request, "docs/css/");
+        if (path == null) {
             return ResponseEntity.notFound();
         }
-        path = path.substring(1);
         byte[] content = readResource(path);
         if (content != null) {
             ResponseEntity<byte[]> responseEntity = ResponseEntity.ok(content);
@@ -187,11 +186,10 @@ public class DocumentationController {
         if (!checkDocsAccess(request, response)) {
             return ResponseEntity.forbidden("Documentation requires admin role in production".getBytes());
         }
-        String path = request.getPathInfo();
-        if (path == null || path.equals("/")) {
+        String path = staticResourcePath(request, "docs/js/");
+        if (path == null) {
             return ResponseEntity.notFound();
         }
-        path = path.substring(1);
         byte[] content = readResource(path);
         if (content != null) {
             ResponseEntity<byte[]> responseEntity = ResponseEntity.ok(content);
@@ -203,9 +201,25 @@ public class DocumentationController {
         }
     }
 
+    /**
+     * Classpath resource for a docs asset request, or {@code null} when it falls outside {@code prefix}.
+     * Routing matches the raw URI while the path info is normalized, so {@code /docs/js/a/../../../x}
+     * reaches this handler with a path info of {@code /x}: it must not be read as a resource.
+     */
+    private static String staticResourcePath(HttpServletRequest request, String prefix) {
+        String path = request.getPathInfo();
+        if (path == null || !path.startsWith("/")) {
+            return null;
+        }
+        path = path.substring(1);
+        if (!path.startsWith(prefix) || path.length() == prefix.length() || path.contains("..")) {
+            return null;
+        }
+        return path;
+    }
+
     private byte[] readResource(String resourcePath) {
-        try {
-            InputStream inputStream = getClass().getClassLoader().getResourceAsStream(resourcePath);
+        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
             if (inputStream == null) {
                 logger.warn("Resource not found: {}", resourcePath);
                 return null;

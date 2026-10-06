@@ -96,7 +96,7 @@ public class CsrfMiddleware implements Middleware {
 
         String origin = req.getHeader("Origin");
         if (origin != null && !origin.isBlank() && !"null".equals(origin)) {
-            if (cors.isOriginAllowed(origin)) {
+            if (cors.isOriginAllowed(origin) || CorsService.isSameOrigin(req, origin)) {
                 return true;
             }
             if (dev) {
@@ -110,7 +110,7 @@ public class CsrfMiddleware implements Middleware {
         String referer = req.getHeader("Referer");
         if (referer != null && !referer.isBlank()) {
             String refOrigin = extractOrigin(referer);
-            if (refOrigin != null && cors.isOriginAllowed(refOrigin)) {
+            if (refOrigin != null && (cors.isOriginAllowed(refOrigin) || CorsService.isSameOrigin(req, refOrigin))) {
                 return true;
             }
             if (dev) {

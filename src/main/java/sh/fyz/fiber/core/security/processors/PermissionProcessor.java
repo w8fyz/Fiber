@@ -4,12 +4,12 @@ import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.security.Permission;
 import sh.fyz.fiber.annotations.security.RequireRole;
 import sh.fyz.fiber.core.ResponseEntity;
-import sh.fyz.fiber.core.authentication.entities.Role;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 public class PermissionProcessor {
     public static Object process(Method method, UserAuth user) {
@@ -42,9 +42,8 @@ public class PermissionProcessor {
         if (user == null || user.getRole() == null) {
             return false;
         }
-        List<String> permissions = Arrays.asList(permission.value());
-        Role userRole = FiberServer.get().getRoleRegistry().getRole(user.getRole());
-        return userRole.getPermissions().containsAll(permissions);
+        // Inherited permissions count; an unregistered role has none.
+        return FiberServer.get().getRoleRegistry().hasAllPermissions(user.getRole(), Set.copyOf(Arrays.asList(permission.value())));
     }
 
     private static boolean checkRole(UserAuth user, RequireRole requireRole) {

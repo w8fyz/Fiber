@@ -180,10 +180,10 @@ public class CorsService {
     public void configureCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
         String origin = request.getHeader("Origin");
 
-        // Same-origin requests do not carry an Origin header — CORS does not apply, leave
-        // the response alone (no Access-Control-* headers, no 403). The browser would have
-        // already enforced same-origin policy at this point.
-        if (origin == null || origin.isBlank()) {
+        // CORS does not apply to same-origin requests: either no Origin header, or (browsers send
+        // one on same-origin POST/PUT/DELETE and fetch calls) the server's own origin. Leave the
+        // response alone (no Access-Control-* headers, no 403).
+        if (origin == null || origin.isBlank() || isSameOrigin(request, origin)) {
             return;
         }
 
@@ -216,6 +216,22 @@ public class CorsService {
         }
         response.setHeader("Access-Control-Max-Age", String.valueOf(maxAge));
         response.addHeader("Vary", "Origin");
+    }
+
+    /** True when {@code origin} is the origin this request was addressed to. */
+    public static boolean isSameOrigin(HttpServletRequest request, String origin) {
+        String scheme = request.getScheme();
+        String host = request.getServerName();
+        if (origin == null || scheme == null || host == null) {
+            return false;
+        }
+        int port = request.getServerPort();
+        boolean defaultPort = port <= 0
+                || ("http".equalsIgnoreCase(scheme) && port == 80)
+                || ("https".equalsIgnoreCase(scheme) && port == 443);
+        String self = scheme + "://" + (host.indexOf(':') >= 0 && !host.startsWith("[") ? "[" + host + "]" : host)
+                + (defaultPort ? "" : ":" + port);
+        return self.equalsIgnoreCase(origin);
     }
 
     private static boolean isDev() {

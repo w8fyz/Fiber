@@ -10,14 +10,23 @@ import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class EmailService {
 
     private static final FiberLogger logger = FiberLog.get(EmailService.class);
+
+    /** SMTP I/O blocks: keep it off the common ForkJoinPool shared by the whole JVM. */
+    private static final ExecutorService SEND_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+
+    private static final String SMTP_CONNECT_TIMEOUT_MILLIS = "10000";
+    private static final String SMTP_READ_TIMEOUT_MILLIS = "30000";
 
     private final jakarta.mail.Session session;
     private final String from;
@@ -54,7 +63,10 @@ public class EmailService {
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.host", host);
         props.put("mail.smtp.port", port);
-        
+        // Without these an unresponsive SMTP server holds a sending thread forever.
+        props.put("mail.smtp.connectiontimeout", SMTP_CONNECT_TIMEOUT_MILLIS);
+        props.put("mail.smtp.timeout", SMTP_READ_TIMEOUT_MILLIS);
+
         if (useSSL) {
             props.put("mail.smtp.ssl.enable", "true");
         }
@@ -75,7 +87,7 @@ public class EmailService {
     }
 
     public CompletableFuture<Void> sendEmail(Email email) {
-        return CompletableFuture.<Void>runAsync(() -> {
+        return CompletableFuture.runAsync(() -> {
             try {
                 // Process template if specified
                 if (email.getTemplatePath() != null) {
@@ -88,11 +100,13 @@ public class EmailService {
                 message.setSubject(email.getSubject());
 
                 MimeMultipart multipart = new MimeMultipart();
+                // Text and HTML are two renderings of the same body: the client shows one of them.
+                MimeMultipart body = new MimeMultipart("alternative");
                 
                 // Add text content
                 MimeBodyPart textPart = new MimeBodyPart();
                 textPart.setText(email.getContent());
-                multipart.addBodyPart(textPart);
+                body.addBodyPart(textPart);
 
                 // Add HTML content if available
                 if (email.getHtmlContent() != null) {
@@ -109,8 +123,11 @@ public class EmailService {
                     }
                     
                     htmlPart.setContent(htmlContent, "text/html; charset=utf-8");
-                    multipart.addBodyPart(htmlPart);
+                    body.addBodyPart(htmlPart);
                 }
+                MimeBodyPart bodyPart = new MimeBodyPart();
+                bodyPart.setContent(body);
+                multipart.addBodyPart(bodyPart);
 
                 // Add attachments
                 if (email.getAttachments() != null && !email.getAttachments().isEmpty()) {
@@ -128,7 +145,7 @@ public class EmailService {
                 logger.error("Failed to send email to {}", email.getTo(), e);
                 throw new EmailDeliveryException("Failed to send email", e);
             }
-        }).whenComplete((v, ex) -> {
+        }, SEND_EXECUTOR).whenComplete((v, ex) -> {
             if (ex != null) {
                 logger.error("Email delivery future completed exceptionally", ex);
             }
@@ -146,6 +163,8 @@ public class EmailService {
         
         // Process all tables
         if (email.getTables() != null) {
+            // Work on a copy: the caller's map may be immutable (Map.of) and must not be modified.
+            variables = variables == null ? new HashMap<>() : new HashMap<>(variables);
             for (Map.Entry<String, Email.TableData> entry : email.getTables().entrySet()) {
                 String variableName = entry.getKey();
                 Email.TableData tableData = entry.getValue();
@@ -160,17 +179,8 @@ public class EmailService {
             }
         }
         
-        // Process the template with variables
+        // Process the template with variables (CSS is inlined once, by sendEmail)
         String htmlContent = EmailTemplateEngine.processTemplateFile(templatePath, variables);
-        // Convert CSS to inline styles if enabled
-        if (convertCssToInline) {
-            try {
-                htmlContent = EmailCssUtils.convertCssToInline(htmlContent);
-            } catch (Exception e) {
-                logger.warn("Failed to inline CSS for template {} — sending raw HTML", templatePath, e);
-            }
-        }
-        
         email.setHtmlContent(htmlContent);
     }
 } 

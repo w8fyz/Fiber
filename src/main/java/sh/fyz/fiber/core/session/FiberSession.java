@@ -6,7 +6,10 @@ import sh.fyz.architect.entities.IdentifiableEntity;
 import java.util.UUID;
 
 @Entity
-@Table(name = "fiber_sessions")
+@Table(name = "fiber_sessions", indexes = {
+        @Index(name = "idx_fiber_sessions_user_id", columnList = "user_id"),
+        @Index(name = "idx_fiber_sessions_expires_at", columnList = "expires_at")
+})
 public class FiberSession implements IdentifiableEntity {
 
     @Id

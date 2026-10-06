@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Registry for challenge types and their creation functions.
@@ -24,7 +25,25 @@ public class ChallengeRegistry {
 
     private static final FiberLogger logger = FiberLog.get(ChallengeRegistry.class);
 
-    private final Map<String, Challenge> activeChallenges;
+    /** Wrong answers accepted before a challenge is discarded. */
+    public static final int MAX_FAILED_ATTEMPTS = 5;
+
+    private final Map<String, Entry> activeChallenges;
+
+    /**
+     * Failure counter guarded by the entry's lock, which also serialises verifications. A lock rather
+     * than a monitor: the challenge callbacks run under it and may block, which would pin a virtual
+     * thread's carrier on JDK 21.
+     */
+    private static final class Entry {
+        final Challenge challenge;
+        final ReentrantLock lock = new ReentrantLock();
+        int failedAttempts;
+
+        Entry(Challenge challenge) {
+            this.challenge = challenge;
+        }
+    }
 
     public ChallengeRegistry() {
         this.activeChallenges = new ConcurrentHashMap<>();
@@ -34,7 +53,7 @@ public class ChallengeRegistry {
         if (callback != null) {
             challenge.setCallback(callback);
         }
-        activeChallenges.put(challenge.getId(), challenge);
+        activeChallenges.put(challenge.getId(), new Entry(challenge));
         return challenge;
     }
 
@@ -44,11 +63,13 @@ public class ChallengeRegistry {
      * @return The challenge if found, empty otherwise
      */
     public Optional<Challenge> getChallenge(String challengeId) {
-        return Optional.ofNullable(activeChallenges.get(challengeId));
+        Entry entry = activeChallenges.get(challengeId);
+        return Optional.ofNullable(entry == null ? null : entry.challenge);
     }
 
     /**
-     * Validates a challenge response.
+     * Validates a challenge response. A challenge is single-use: it is discarded once
+     * completed or expired, and after {@link #MAX_FAILED_ATTEMPTS} wrong answers.
      *
      * @return the {@link ResponseEntity} produced by the challenge, or {@code null} if
      *         the challenge has expired (response already written).
@@ -58,30 +79,46 @@ public class ChallengeRegistry {
     public ResponseEntity<Object> validateChallenge(String challengeId, Object response,
                                                     HttpServletRequest request,
                                                     HttpServletResponse httpResponse) {
-        Challenge challenge = activeChallenges.get(challengeId);
-        if (challenge == null) {
+        Entry entry = activeChallenges.get(challengeId);
+        if (entry == null) {
             throw new ChallengeNotFoundException(challengeId);
         }
 
-        if (challenge.isExpired()) {
-            try {
-                challenge.setStatus(ChallengeStatus.EXPIRED, request, httpResponse);
-            } catch (IOException e) {
-                logger.error("Failed to mark challenge {} as expired", challengeId, e);
-                throw new ChallengeValidationFailedException("Failed to expire challenge", e);
-            }
-            return null;
-        }
-
-        boolean isValid = challenge.validateResponse(response);
-        if (isValid) {
-            return challenge.complete(request, httpResponse);
-        }
+        entry.lock.lock();
         try {
-            return challenge.fail(request, httpResponse);
-        } catch (IOException e) {
-            logger.error("Failed to mark challenge {} as failed", challengeId, e);
-            throw new ChallengeValidationFailedException("Failed to fail challenge", e);
+            // A concurrent verification may have consumed the challenge meanwhile.
+            if (activeChallenges.get(challengeId) != entry) {
+                throw new ChallengeNotFoundException(challengeId);
+            }
+            Challenge challenge = entry.challenge;
+
+            if (challenge.isExpired()) {
+                activeChallenges.remove(challengeId, entry);
+                try {
+                    challenge.setStatus(ChallengeStatus.EXPIRED, request, httpResponse);
+                } catch (IOException e) {
+                    logger.error("Failed to mark challenge {} as expired", challengeId, e);
+                    throw new ChallengeValidationFailedException("Failed to expire challenge", e);
+                }
+                return null;
+            }
+
+            if (challenge.validateResponse(response)) {
+                activeChallenges.remove(challengeId, entry);
+                return challenge.complete(request, httpResponse);
+            }
+
+            if (++entry.failedAttempts >= MAX_FAILED_ATTEMPTS) {
+                activeChallenges.remove(challengeId, entry);
+            }
+            try {
+                return challenge.fail(request, httpResponse);
+            } catch (IOException e) {
+                logger.error("Failed to mark challenge {} as failed", challengeId, e);
+                throw new ChallengeValidationFailedException("Failed to fail challenge", e);
+            }
+        } finally {
+            entry.lock.unlock();
         }
     }
 
@@ -97,6 +134,6 @@ public class ChallengeRegistry {
      * Cleans up expired challenges
      */
     public void cleanupExpiredChallenges() {
-        activeChallenges.entrySet().removeIf(entry -> entry.getValue().isExpired());
+        activeChallenges.values().removeIf(entry -> entry.challenge.isExpired());
     }
 }

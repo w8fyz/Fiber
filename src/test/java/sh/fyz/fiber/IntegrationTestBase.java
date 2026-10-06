@@ -7,6 +7,8 @@ import sh.fyz.architect.Architect;
 import sh.fyz.architect.persistent.DatabaseCredentials;
 import sh.fyz.architect.persistent.sql.provider.PostgreSQLAuth;
 import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.fiber.core.authentication.impl.BearerAuthenticator;
+import sh.fyz.fiber.core.authentication.impl.CookieAuthenticator;
 import sh.fyz.fiber.core.security.cors.CorsService;
 import sh.fyz.fiber.core.session.FiberSession;
 import sh.fyz.fiber.core.session.SessionService;
@@ -57,7 +59,7 @@ public abstract class IntegrationTestBase {
                 .setDatabaseCredentials(
                         new DatabaseCredentials(
                                 new PostgreSQLAuth(dbHost, dbPort, dbName),
-                                dbUser, dbPassword, 4, 2));
+                                dbUser, dbPassword, 4));
         architect.start();
 
         userRepository = new GenericRepository<>(TestUser.class);
@@ -66,6 +68,9 @@ public abstract class IntegrationTestBase {
 
         server = new FiberServer(PORT);
         server.enableDevelopmentMode();
+
+        server.getAuthResolver().registerAuthenticator(new CookieAuthenticator());
+        server.getAuthResolver().registerAuthenticator(new BearerAuthenticator());
 
         authService = new TestAuthService(userRepository);
         server.setAuthService(authService);

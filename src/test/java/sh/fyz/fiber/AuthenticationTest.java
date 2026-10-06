@@ -1,6 +1,7 @@
 package sh.fyz.fiber;
 
 import org.junit.jupiter.api.*;
+import sh.fyz.fiber.core.JwtUtil;
 
 import java.net.http.HttpResponse;
 import java.util.Map;
@@ -104,5 +105,47 @@ public class AuthenticationTest extends IntegrationTestBase {
 
         String setCookieHeader = resp.headers().allValues("set-cookie").toString();
         assertTrue(setCookieHeader.contains("Max-Age=0"), "Cookies should be expired on logout");
+    }
+
+    @Test
+    @Order(10)
+    void testLogoutWithoutAuthenticationRevokesSession() throws Exception {
+        Map<String, String> cookies = extractCookies(loginUser(USERNAME, "password123"));
+        String accessToken = cookies.get("access_token");
+        assertEquals(200, get("/test/bearer", Map.of("Authorization", "Bearer " + accessToken)).statusCode());
+
+        HttpResponse<String> resp = post("/test-auth/logout-unauthenticated", "{}",
+                Map.of("Cookie", cookieHeader(cookies)));
+        assertEquals(200, resp.statusCode(), "Logout failed: " + resp.body());
+
+        assertEquals(401, get("/test/bearer", Map.of("Authorization", "Bearer " + accessToken)).statusCode(),
+                "The access token of a logged-out session must be rejected");
+    }
+
+    @Test
+    @Order(11)
+    void testLogoutWithRotatedRefreshTokenKeepsTheSession() throws Exception {
+        // The loser of two concurrent refreshes still holds the old, already rotated refresh token.
+        // Clearing its cookies must not revoke the session the winner's new tokens are tied to.
+        Map<String, String> cookies = extractCookies(loginUser(USERNAME, "password123"));
+        String accessToken = cookies.get("access_token");
+        assertTrue(JwtUtil.consumeRefreshToken(cookies.get("refresh_token")), "simulates the winning refresh");
+
+        HttpResponse<String> resp = post("/test-auth/logout-unauthenticated", "{}",
+                Map.of("Cookie", cookieHeader(cookies)));
+        assertEquals(200, resp.statusCode(), "Logout failed: " + resp.body());
+
+        assertEquals(200, get("/test/bearer", Map.of("Authorization", "Bearer " + accessToken)).statusCode(),
+                "The session must survive a logout carrying a stale refresh token");
+    }
+
+    @Test
+    @Order(12)
+    void testRefreshTokenCanBeConsumedOnlyOnce() throws Exception {
+        String refreshToken = extractCookies(loginUser(USERNAME, "password123")).get("refresh_token");
+        assertNotNull(refreshToken);
+        assertTrue(JwtUtil.consumeRefreshToken(refreshToken));
+        assertFalse(JwtUtil.consumeRefreshToken(refreshToken), "A refresh token is single-use");
+        assertFalse(JwtUtil.consumeRefreshToken("forged.token.value"));
     }
 }

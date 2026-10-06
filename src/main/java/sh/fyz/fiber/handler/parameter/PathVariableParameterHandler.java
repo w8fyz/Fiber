@@ -8,6 +8,8 @@ import sh.fyz.fiber.validation.ValidationRegistry;
 import sh.fyz.fiber.validation.ValidationResult;
 
 import java.lang.reflect.Parameter;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 
 public class PathVariableParameterHandler implements ParameterHandler {
@@ -32,6 +34,13 @@ public class PathVariableParameterHandler implements ParameterHandler {
 
         if (value == null) {
             throw new IllegalArgumentException("Missing path variable: " + name);
+        }
+        // Routes match the raw request URI: decode the segment ("john%20doe" -> "john doe"). A '+' is a
+        // literal plus in a path, unlike in a query string, so it is protected from URLDecoder.
+        try {
+            value = URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid value for path variable: " + name);
         }
 
         Object convertedValue = TypeConverter.convert(value, parameter.getType());

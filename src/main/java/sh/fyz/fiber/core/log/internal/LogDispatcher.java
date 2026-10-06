@@ -42,7 +42,8 @@ public final class LogDispatcher {
     public void dispatch(LogEvent event) {
         if (handlers.isEmpty()) return;
 
-        boolean preferSync = event.level() == LogLevel.ERROR;
+        // After shutdown the worker is gone: a queued event would never be emitted.
+        boolean preferSync = !running;
         if (!preferSync) {
             for (LogHandler h : handlers) {
                 if (h.prefersSync()) {
@@ -52,17 +53,17 @@ public final class LogDispatcher {
             }
         }
 
+        if (preferSync) {
+            emitSync(event);
+            return;
+        }
+
         if (event.level() == LogLevel.ERROR) {
             try {
                 if (queue.offer(event, ERROR_PUT_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return;
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
             }
-            emitSync(event);
-            return;
-        }
-
-        if (preferSync) {
             emitSync(event);
             return;
         }
@@ -100,7 +101,8 @@ public final class LogDispatcher {
                 null,
                 null
         );
-        queue.offer(synthetic);
+        // Reported when the queue is full, so queueing the report would drop it as well.
+        emitSync(synthetic);
     }
 
     private void ensureWorker() {

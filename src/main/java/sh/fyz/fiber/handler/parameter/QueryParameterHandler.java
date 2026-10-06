@@ -44,6 +44,11 @@ public class QueryParameterHandler implements ParameterHandler {
             throw new IllegalArgumentException(result.getFirstError());
         }
 
+        if (convertedValue == null && parameter.getType().isPrimitive()) {
+            // An absent optional primitive gets the type's default value (0, false): null cannot be
+            // passed to the method and would fail the invocation with a 500.
+            return java.lang.reflect.Array.get(java.lang.reflect.Array.newInstance(parameter.getType(), 1), 0);
+        }
         return convertedValue;
     }
 }

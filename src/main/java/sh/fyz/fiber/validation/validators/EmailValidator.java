@@ -19,7 +19,7 @@ public class EmailValidator implements Validator<String> {
         }
 
         if (!EMAIL_PATTERN.matcher(value).matches()) {
-            return ValidationResult.invalid("Invalid email format");
+            return ValidationResult.invalid(((Email) annotation).message());
         }
 
         return ValidationResult.valid();

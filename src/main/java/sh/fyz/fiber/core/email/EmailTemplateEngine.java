@@ -162,7 +162,8 @@ public class EmailTemplateEngine {
             for (int j = 0; j < columnNames.length; j++) {
                 String columnName = columnNames[j];
                 Object value = dto.get(columnName);
-                String formattedValue = formatValue(value, columnDefinitions.get(j).format());
+                // Escaped: DTO values are data (often user-supplied), not markup.
+                String formattedValue = escapeHtml(formatValue(value, columnDefinitions.get(j).format()));
 
                 // Apply styling
                 if (columnDefinitions.get(j).bold()) {
@@ -185,8 +186,9 @@ public class EmailTemplateEngine {
     private static <T extends DTOConvertible> List<ColumnDefinition> getColumnDefinitions(List<T> items) {
         T firstItem = items.get(0);
 
-        // Get all methods from the class
-        Field[] fields = firstItem.getClass().getDeclaredFields();
+        // The same fields asDTO() reads (inherited ones included, static and @IgnoreDTO ones excluded),
+        // under the same names, so every column finds its value.
+        List<Field> fields = DTOConvertible.getCachedFields(firstItem.getClass());
 
         // Create a list of column definitions
         List<ColumnDefinition> columnDefinitions = new ArrayList<>();
@@ -194,9 +196,6 @@ public class EmailTemplateEngine {
         for (Field field : fields) {
 
             String fieldName = field.getName();
-            if (!fieldName.isEmpty()) {
-                fieldName = fieldName.substring(0, 1).toLowerCase() + fieldName.substring(1);
-            }
 
             // Get the MailColumn annotation from the field
             MailColumn annotation = field.getAnnotation(MailColumn.class);
@@ -221,6 +220,22 @@ public class EmailTemplateEngine {
             ));
         }
         return columnDefinitions;
+    }
+
+    private static String escapeHtml(String value) {
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '&' -> sb.append("&amp;");
+                case '<' -> sb.append("&lt;");
+                case '>' -> sb.append("&gt;");
+                case '"' -> sb.append("&quot;");
+                case '\'' -> sb.append("&#39;");
+                default -> sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     /**

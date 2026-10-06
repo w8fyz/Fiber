@@ -21,7 +21,12 @@ public class FileUploadManager {
 
     private FileUploadManager() {
         this.uploads = new ConcurrentHashMap<>();
-        this.cleanupExecutor = Executors.newSingleThreadScheduledExecutor();
+        // Daemon: this class-loaded singleton must not keep the JVM alive.
+        this.cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "fiber-upload-cleanup");
+            t.setDaemon(true);
+            return t;
+        });
         startCleanupTask();
     }
 
@@ -33,7 +38,15 @@ public class FileUploadManager {
      * Enregistre un nouveau fichier téléchargé.
      */
     public void registerUpload(UploadedFile file) {
-        uploads.put(file.getUploadId(), file);
+        // Never replace a live upload: its files would be orphaned and its owner hijacked.
+        if (uploads.putIfAbsent(file.getUploadId(), file) != null) {
+            try {
+                file.cleanup();
+            } catch (Exception e) {
+                FiberLog.handleSilent(e);
+            }
+            throw new IllegalArgumentException("Upload ID already in use");
+        }
     }
 
     /**

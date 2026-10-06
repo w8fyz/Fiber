@@ -8,7 +8,8 @@ public class RateLimitExceededException extends RuntimeException {
     }
 
     public RateLimitExceededException(String message, long retryAfterSeconds) {
-        super(message);
+        // No stack trace: thrown on every rejected request, i.e. on exactly the path a flood hits.
+        super(message, null, false, false);
         this.retryAfterSeconds = retryAfterSeconds;
     }
 

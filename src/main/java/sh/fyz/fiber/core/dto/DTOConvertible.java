@@ -4,6 +4,7 @@ import sh.fyz.fiber.annotations.dto.IgnoreDTO;
 import sh.fyz.fiber.util.JsonUtil;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,7 +25,9 @@ public abstract class DTOConvertible {
             List<Field> list = new ArrayList<>();
             while (c != null && c != Object.class) {
                 for (Field f : c.getDeclaredFields()) {
-                    if (!f.isAnnotationPresent(IgnoreDTO.class)) {
+                    // Static and compiler-generated fields (serialVersionUID, loggers, this$0) are not data.
+                    if (!Modifier.isStatic(f.getModifiers()) && !f.isSynthetic()
+                            && !f.isAnnotationPresent(IgnoreDTO.class)) {
                         f.setAccessible(true);
                         list.add(f);
                     }

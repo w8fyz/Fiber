@@ -2,20 +2,24 @@ package sh.fyz.fiber.core.authentication.oauth2;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.architect.repositories.GenericRepository;
+import sh.fyz.architect.repositories.QueryBuilder;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.authentication.oauth2.entities.UserOAuth2Token;
 import sh.fyz.fiber.util.TokenCrypto;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Persists per-user OAuth2 provider tokens and serves as the authoritative
@@ -38,6 +42,15 @@ public class UserOAuth2TokenService {
     private final GenericRepository<UserOAuth2Token> repository;
     private final Cache<String, Optional<UserOAuth2Token>> cache;
     private final ScheduledExecutorService cleanupExecutor;
+    /**
+     * Serialises refreshes of the same (user, provider) pair: providers that rotate refresh tokens
+     * (Discord) reject the second of two concurrent refreshes using the same token. Locks rather than
+     * monitors, because the provider call blocks and would pin a virtual thread's carrier on JDK 21.
+     * One lock per pair, so a slow provider call never delays other users; weakly held, an unused
+     * lock is reclaimed (a lock being used is referenced by its thread, so it is never replaced).
+     */
+    private final LoadingCache<String, ReentrantLock> refreshLocks =
+            Caffeine.newBuilder().weakValues().build(k -> new ReentrantLock());
 
     public UserOAuth2TokenService(GenericRepository<UserOAuth2Token> repository) {
         this.repository = repository;
@@ -122,11 +135,21 @@ public class UserOAuth2TokenService {
         if (!token.isExpiringWithin(CLOCK_SKEW_MILLIS)) {
             return decryptNullable(token.getAccessToken());
         }
-        String refresh = decryptNullable(token.getRefreshToken());
-        if (refresh == null) {
-            return null;
-        }
+        ReentrantLock lock = refreshLocks.get(cacheKey(userId, provider.getProviderId()));
+        lock.lock();
         try {
+            // A concurrent call may have refreshed the token while this one waited for the lock.
+            token = find(userId, provider.getProviderId()).orElse(null);
+            if (token == null) {
+                return null;
+            }
+            if (!token.isExpiringWithin(CLOCK_SKEW_MILLIS)) {
+                return decryptNullable(token.getAccessToken());
+            }
+            String refresh = decryptNullable(token.getRefreshToken());
+            if (refresh == null) {
+                return null;
+            }
             OAuth2TokenResponse refreshed = provider.refreshAccessToken(refresh);
             if (refreshed == null || refreshed.getAccessToken() == null) {
                 return null;
@@ -137,6 +160,8 @@ public class UserOAuth2TokenService {
             logger.warn("[Fiber] OAuth2 refresh failed for user={} provider={}: {}",
                     userId, provider.getProviderId(), e.getMessage());
             return null;
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -171,17 +196,15 @@ public class UserOAuth2TokenService {
      * refresh them.
      */
     public void cleanupExpiredWithoutRefresh() {
+        // One DELETE instead of loading the whole table. The deleted keys are unknown, so drop the
+        // whole cache (30-second entries, hourly job) rather than let find() return deleted rows.
         try {
-            List<UserOAuth2Token> rows = repository.query().findAll();
-            long now = System.currentTimeMillis();
-            for (UserOAuth2Token row : rows) {
-                Long exp = row.getExpiresAt();
-                boolean expired = exp != null && now >= exp;
-                boolean noRefresh = row.getRefreshToken() == null || row.getRefreshToken().isBlank();
-                if (expired && noRefresh) {
-                    repository.delete(row);
-                    cache.invalidate(cacheKey(row.getUserId(), row.getProviderId()));
-                }
+            int deleted = repository.query()
+                    .where("expiresAt", QueryBuilder.Operator.LTE, System.currentTimeMillis())
+                    .whereRaw("refreshToken IS NULL OR trim(refreshToken) = ''", Map.of())
+                    .delete();
+            if (deleted > 0) {
+                cache.invalidateAll();
             }
         } catch (Exception e) {
             logger.warn("[Fiber] OAuth2 token cleanup failed: {}", e.getMessage());

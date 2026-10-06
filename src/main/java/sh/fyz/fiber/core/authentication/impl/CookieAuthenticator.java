@@ -8,6 +8,7 @@ import sh.fyz.fiber.core.authentication.Authenticator;
 import sh.fyz.fiber.core.authentication.AuthScheme;
 import sh.fyz.fiber.core.authentication.entities.UserAuth;
 import sh.fyz.fiber.core.JwtUtil;
+import sh.fyz.fiber.util.HttpUtil;
 
 public class CookieAuthenticator implements Authenticator {
     private static final String ACCESS_TOKEN_COOKIE = "access_token";
@@ -27,7 +28,7 @@ public class CookieAuthenticator implements Authenticator {
         for (Cookie cookie : cookies) {
             if (ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
                 String token = cookie.getValue();
-                Claims claims = JwtUtil.validateToken(token, request.getRemoteAddr(), request.getHeader("User-Agent"));
+                Claims claims = JwtUtil.validateToken(token, HttpUtil.getClientIpAddress(request), request.getHeader("User-Agent"));
 
                 if (claims != null) {
                     if (!SessionValidator.validate(claims)) {
