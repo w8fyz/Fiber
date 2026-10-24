@@ -1,6 +1,7 @@
 package sh.fyz.fiber.docs;
 
 import sh.fyz.fiber.annotations.request.RequestMapping;
+import sh.fyz.fiber.handler.EndpointHandler;
 import sh.fyz.fiber.annotations.params.Param;
 import sh.fyz.fiber.annotations.params.RequestBody;
 import sh.fyz.fiber.annotations.params.PathVariable;
@@ -106,7 +107,8 @@ public class EndpointDoc {
     }
 
     public static EndpointDoc fromMethod(Method method, String basePath) {
-        String path = basePath + method.getAnnotation(RequestMapping.class).value();
+        // The path the endpoint is served at, joined exactly as the router joins it.
+        String path = EndpointHandler.joinPath(basePath, method.getAnnotation(RequestMapping.class).value());
         RequestMapping.Method httpMethod = method.getAnnotation(RequestMapping.class).method();
         List<ParameterDoc> parameters = new ArrayList<>();
         List<PathVariableDoc> pathVariables = new ArrayList<>();

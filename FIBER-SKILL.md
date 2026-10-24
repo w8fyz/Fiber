@@ -268,6 +268,7 @@ Controllers can be registered by class (`server.registerController(UserControlle
 - Parameterized: `/users/{id}` — `{name}` segments become named regex groups
 - Wildcard: `/docs/css/*`
 - Paths are normalized via `EndpointHandler.normalizePath()`: `//` → `/`, trailing slashes removed, leading `/` ensured
+- The `@Controller` base path and the `@RequestMapping` value are joined with a separator (`EndpointHandler.joinPath()`), so either may omit its leading `/`: `@Controller("api")` + `@RequestMapping("users")` is served at `/api/users`, whether the controller is registered as an instance or as a class. The route is registered and matched from that single joined path, and the API documentation shows the same one.
 - **Priority resolution**: when multiple patterns match the same URL (e.g., `/blog/rss` matches both `/blog/rss` and `/blog/{slug}`), the endpoint with the fewest path variables wins. This is tracked by `pathVariableCount` on each `EndpointHandler`.
 
 ## Parameter Injection

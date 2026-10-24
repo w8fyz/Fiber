@@ -49,6 +49,15 @@ public class EndpointHandler {
     private final List<Middleware> globalMiddleware;
 
     public EndpointHandler(Object controller, Method method, List<Middleware> globalMiddleware, String[] requiredRoles) {
+        this(controller, method, pathOf(method), globalMiddleware, requiredRoles);
+    }
+
+    /**
+     * @param path the path the endpoint is registered under, so that the route it is looked up by
+     *             and the pattern it matches come from the same string
+     */
+    public EndpointHandler(Object controller, Method method, String path, List<Middleware> globalMiddleware,
+                           String[] requiredRoles) {
         this.controller = controller;
         this.method = method;
         this.parameters = method.getParameters();
@@ -71,10 +80,7 @@ public class EndpointHandler {
 
         this.globalMiddleware = globalMiddleware;
 
-        RequestMapping mapping = method.getAnnotation(RequestMapping.class);
-        Controller controllerAnnotation = method.getDeclaringClass().getAnnotation(Controller.class);
-        String basePath = controllerAnnotation != null ? controllerAnnotation.value() : "";
-        String path = normalizePath(basePath + mapping.value());
+        path = normalizePath(path);
         this.route = path;
 
         String regex = path
@@ -86,6 +92,13 @@ public class EndpointHandler {
         int varCount = 0;
         while (matcher.find()) varCount++;
         this.pathVariableCount = varCount;
+    }
+
+    /** The path declared by the method's {@code @RequestMapping} under its class's {@code @Controller}. */
+    private static String pathOf(Method method) {
+        Controller controllerAnnotation = method.getDeclaringClass().getAnnotation(Controller.class);
+        String basePath = controllerAnnotation != null ? controllerAnnotation.value() : "";
+        return joinPath(basePath, method.getAnnotation(RequestMapping.class).value());
     }
 
     private static Set<AuthScheme> computeAcceptedAuthSchemes(Method method) {
@@ -235,14 +248,21 @@ public class EndpointHandler {
         return pathPattern;
     }
 
+    /** Rooted, with single separators and no trailing slash: {@code api//users/} becomes {@code /api/users}. */
     public static String normalizePath(String path) {
-        String normalized = path.replaceAll("/{2,}", "/");
+        String normalized = ("/" + (path == null ? "" : path)).replaceAll("/{2,}", "/");
         if (normalized.length() > 1 && normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
-        if (normalized.isEmpty()) {
-            normalized = "/";
-        }
         return normalized;
+    }
+
+    /**
+     * The path an endpoint is served at: a {@code @Controller} base path and a {@code @RequestMapping}
+     * value joined by a separator, then normalized, so either may be written with or without a
+     * leading slash ({@code "api"} and {@code "users"} give {@code /api/users}).
+     */
+    public static String joinPath(String basePath, String path) {
+        return normalizePath((basePath == null ? "" : basePath) + "/" + (path == null ? "" : path));
     }
 }

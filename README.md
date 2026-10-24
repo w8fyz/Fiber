@@ -83,6 +83,8 @@ Path variables use `{name}` syntax. Wildcard `*` matches any segment.
 
 Static routes always take priority over parameterized ones (`/users/me` wins over `/users/{id}`).
 
+The controller path and the mapping are joined with a `/`, so either may be written without a leading slash: `@Controller("api")` with `@RequestMapping("users")` is served at `/api/users`.
+
 ## Parameter Injection
 
 | Annotation | Source | Example |

@@ -7,7 +7,6 @@ import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
-import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.config.FiberConfig;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
@@ -39,7 +38,6 @@ import sh.fyz.fiber.core.authentication.RoleRegistry;
 import sh.fyz.fiber.core.authentication.AuthResolver;
 import sh.fyz.fiber.core.authentication.impl.BasicAuthenticator;
 import sh.fyz.fiber.core.session.SessionService;
-import sh.fyz.fiber.handler.EndpointHandler;
 import sh.fyz.fiber.util.HttpUtil;
 import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.core.log.FiberLogger;
@@ -274,31 +272,9 @@ public class FiberServer {
     }
 
     public void registerController(Object controller) {
-        Class<?> controllerClass = controller.getClass();
-        Controller annotation = controllerClass.getAnnotation(Controller.class);
-        if (annotation == null) {
-            throw new IllegalArgumentException("Controller class must be annotated with @Controller");
-        }
-
-        String basePath = annotation.value();
-        if (!basePath.startsWith("/")) {
-            basePath = "/" + basePath;
-        }
-
-        for (Method method : controllerClass.getDeclaredMethods()) {
-            RequestMapping requestMapping = method.getAnnotation(RequestMapping.class);
-            if (requestMapping != null) {
-                String path = requestMapping.value();
-                if (!path.startsWith("/")) {
-                    path = "/" + path;
-                }
-                String fullPath = EndpointHandler.normalizePath(basePath + path);
-                endpointRegistry.registerEndpoint(fullPath, requestMapping.method(), method, controller);
-            }
-        }
-
+        endpointRegistry.registerController(controller);
         if (documentationEnabled) {
-            documentationController.registerController(controllerClass);
+            documentationController.registerController(controller.getClass());
         }
     }
 

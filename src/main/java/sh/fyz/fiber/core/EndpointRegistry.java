@@ -36,24 +36,35 @@ public class EndpointRegistry {
     }
 
     public void registerController(Class<?> controllerClass) {
-        Controller controllerAnnotation = controllerClass.getAnnotation(Controller.class);
-        if (controllerAnnotation == null) {
+        if (controllerClass.getAnnotation(Controller.class) == null) {
             throw new IllegalArgumentException("Class must be annotated with @Controller");
         }
 
-        String basePath = controllerAnnotation.value();
         Object controllerInstance;
         try {
             controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
         } catch (Exception e) {
             throw new RuntimeException("Failed to create controller instance", e);
         }
+        registerController(controllerInstance);
+    }
 
+    /**
+     * Registers every {@code @RequestMapping} method of {@code controller}, each under its
+     * {@code @Controller} base path joined with its mapping ({@link EndpointHandler#joinPath}).
+     */
+    public void registerController(Object controller) {
+        Class<?> controllerClass = controller.getClass();
+        Controller controllerAnnotation = controllerClass.getAnnotation(Controller.class);
+        if (controllerAnnotation == null) {
+            throw new IllegalArgumentException("Controller class must be annotated with @Controller");
+        }
+
+        String basePath = controllerAnnotation.value();
         for (Method method : controllerClass.getDeclaredMethods()) {
             RequestMapping mapping = method.getAnnotation(RequestMapping.class);
             if (mapping != null) {
-                String path = EndpointHandler.normalizePath(basePath + mapping.value());
-                registerEndpoint(path, mapping.method(), method, controllerInstance);
+                registerEndpoint(EndpointHandler.joinPath(basePath, mapping.value()), mapping.method(), method, controller);
             }
         }
     }
@@ -62,8 +73,10 @@ public class EndpointRegistry {
         RequireRole methodRole = method.getAnnotation(RequireRole.class);
         String[] requiredRoles = methodRole != null ? methodRole.value() : defaultRoles;
 
+        // The lookup key and the handler's pattern come from the same normalized path.
+        path = EndpointHandler.normalizePath(path);
         String key = path + ":" + httpMethod;
-        EndpointHandler handler = new EndpointHandler(controllerInstance, method, globalMiddleware, requiredRoles);
+        EndpointHandler handler = new EndpointHandler(controllerInstance, method, path, globalMiddleware, requiredRoles);
         EndpointHandler previous = endpoints.putIfAbsent(key, handler);
         if (previous != null) {
             logger.warn("Duplicate endpoint registration ignored: {} {}", httpMethod, path);
