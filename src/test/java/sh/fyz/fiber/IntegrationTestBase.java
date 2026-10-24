@@ -106,6 +106,7 @@ public abstract class IntegrationTestBase {
         server.registerController(new TestRelativePathControllers.Relative());
         server.registerController(TestRelativePathControllers.MixedByClass.class);
         server.registerController(TestRelativePathControllers.RelativeByClass.class);
+        server.registerController(new TestAuditPathController());
 
         server.start();
 

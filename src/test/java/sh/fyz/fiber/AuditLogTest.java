@@ -78,6 +78,7 @@ public class AuditLogTest extends IntegrationTestBase {
         assertNotNull(log, "Audit log should still be captured without custom data");
         assertEquals("SIMPLE_READ", log.getAction());
         assertNull(log.getCustomData(), "Custom data should be null when AuditContext is not used");
+        assertNull(log.getPathVariables(), "A route without variables records none");
     }
 
     @Test
@@ -110,5 +111,21 @@ public class AuditLogTest extends IntegrationTestBase {
                 "Duration should cover the handler, was " + log.getDurationMs() + " ms");
         assertTrue(log.getRawLog().contains("\"durationMs\":" + log.getDurationMs()),
                 "The serialized record should carry the same duration");
+    }
+
+    @Test
+    @Order(7)
+    void testAuditLogPathVariablesAreTheOnesTheRequestWasRoutedWith() throws Exception {
+        auditLogService.clear();
+        HttpResponse<String> resp = get("/audit-vars/acme/42");
+        assertEquals(200, resp.statusCode(), resp.body());
+
+        AuditLog log = await().atMost(Duration.ofSeconds(5))
+                .until(auditLogService::getLastLog, Objects::nonNull);
+        assertEquals("PATH_VARS", log.getAction());
+        // The base path's variable is included, and the mapping's leading variable reads its own segment.
+        assertEquals(Map.of("tenant", "acme", "id", "42"), log.getPathVariables());
+        assertTrue(log.getRawLog().contains("\"pathVariables\":{\"tenant\":\"acme\",\"id\":\"42\"}"),
+                "The serialized record lists them in path order: " + log.getRawLog());
     }
 }

@@ -754,7 +754,7 @@ Sensitive data masking is **recursive** — nested objects and maps containing k
 
 The raw request body is automatically cached by `RequestBodyParameterHandler` and available for audit logging even after the input stream is consumed.
 
-`AuditLog.getTimestamp()` is when the record was taken, once the endpoint has produced its response; `getDurationMs()` is the time since the router received the request (`-1` for a record produced outside the router). Audit records exist only for `@AuditLog` endpoints: to time every request, use a `RequestListener`.
+`AuditLog.getTimestamp()` is when the record was taken, once the endpoint has produced its response; `getDurationMs()` is the time since the router received the request (`-1` for a record produced outside the router). `getPathVariables()` holds the raw values of the route's `{name}` segments, controller base path included, in path order: the endpoint reads them with the very pattern the request was routed by and passes them to `AuditLogProcessor.logAuditEvent`. Audit records exist only for `@AuditLog` endpoints: to time every request, use a `RequestListener`.
 
 ### Security Headers (automatic)
 

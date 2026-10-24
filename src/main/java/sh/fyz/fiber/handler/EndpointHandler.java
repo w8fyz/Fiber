@@ -27,7 +27,9 @@ import java.lang.reflect.Parameter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Set;
@@ -147,7 +149,8 @@ public class EndpointHandler {
         }
 
         if (auditLog != null) {
-            AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, invocation.args(), invocation.result());
+            AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, invocation.args(), invocation.result(),
+                    pathVariables(req.getRequestURI()));
         }
         if (rateLimit != null && resp.getStatus() == HttpServletResponse.SC_OK) {
             RateLimitProcessor.reset(rateLimit, method, invocation.args(), req);
@@ -194,6 +197,25 @@ public class EndpointHandler {
         } catch (Exception e) {
             throw new ServletException("Failed to invoke endpoint method", e);
         }
+    }
+
+    /**
+     * The raw values of this endpoint's {@code {name}} segments in {@code requestUri}, in path order,
+     * read with the pattern the request was routed by. Empty when the route declares none.
+     */
+    private Map<String, String> pathVariables(String requestUri) {
+        if (pathVariableCount == 0) {
+            return Map.of();
+        }
+        Matcher matcher = pathPattern.matcher(requestUri);
+        if (!matcher.matches()) {
+            return Map.of();
+        }
+        Map<String, String> variables = new LinkedHashMap<>();
+        matcher.namedGroups().entrySet().stream()
+                .sorted(Map.Entry.comparingByValue())
+                .forEach(group -> variables.put(group.getKey(), matcher.group(group.getValue())));
+        return variables;
     }
 
     private boolean rejectRateLimited(HttpServletRequest req, HttpServletResponse resp) throws IOException {
