@@ -25,8 +25,8 @@ A modern Java 21+ framework for building RESTful APIs on top of Jetty. Minimal b
 
 ```groovy
 dependencies {
-    implementation 'sh.fyz:Fiber:3.0.0'
-    implementation 'sh.fyz:Architect:3.0.0' // ORM (optional, required for sessions)
+    implementation 'sh.fyz:Fiber:3.0.1'
+    implementation 'sh.fyz:Architect:3.0.1' // ORM (optional, required for sessions)
 }
 ```
 
