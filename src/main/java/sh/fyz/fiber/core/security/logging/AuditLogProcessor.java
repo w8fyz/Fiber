@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
+import sh.fyz.fiber.core.request.RequestAttributes;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.upload.UploadedFile;
 import sh.fyz.fiber.util.JsonUtil;
@@ -19,6 +20,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,6 +63,7 @@ public class AuditLogProcessor {
     @SuppressWarnings("unchecked")
     public static void logAuditEvent(HttpServletRequest req, HttpServletResponse resp, AuditLog auditLog, Method method, Object[] args, Object result) {
         long timestamp = System.currentTimeMillis();
+        long durationMs = elapsedMillis(req);
         String ip = req.getRemoteAddr();
         String userAgent = req.getHeader("User-Agent");
         String httpMethod = req.getMethod();
@@ -89,7 +92,7 @@ public class AuditLogProcessor {
 
         resolveExecutor().submit(() -> {
             try {
-                processAuditLog(timestamp, ip, userAgent, httpMethod, uri, status, parameterMap,
+                processAuditLog(timestamp, durationMs, ip, userAgent, httpMethod, uri, status, parameterMap,
                         rawBody, customData, auditLog, method, loggedArgs, result);
             } catch (Exception e) {
                 logger.error("Failed to process audit log", e);
@@ -120,8 +123,17 @@ public class AuditLogProcessor {
         });
     }
 
+    /** Time since the router received the request, or {@code -1} when the request did not go through it. */
+    private static long elapsedMillis(HttpServletRequest req) {
+        Object startNanos = req.getAttribute(RequestAttributes.START_NANOS);
+        if (startNanos instanceof Long start) {
+            return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+        }
+        return -1L;
+    }
+
     @SuppressWarnings("unchecked")
-    private static void processAuditLog(long timestamp, String ip, String userAgent, String httpMethod,
+    private static void processAuditLog(long timestamp, long durationMs, String ip, String userAgent, String httpMethod,
                                          String uri, int status, Map<String, String[]> parameterMap,
                                          String rawBody, Map<String, Object> customData,
                                          AuditLog auditLog, Method method, Object[] args, Object result) {
@@ -134,6 +146,9 @@ public class AuditLogProcessor {
         logData.put("uri", uri);
         logData.put("action", auditLog.action());
         logData.put("status", status);
+        if (durationMs >= 0) {
+            logData.put("durationMs", durationMs);
+        }
 
         if (!parameterMap.isEmpty()) {
             Map<String, String> queryParams = new HashMap<>(parameterMap.size());
@@ -246,6 +261,7 @@ public class AuditLogProcessor {
 
                 service.onAuditLog(new sh.fyz.fiber.core.security.logging.AuditLog(
                     (Long) logData.get("timestamp"),
+                    durationMs,
                     (String) logData.get("ip"),
                     (String) logData.get("userAgent"),
                     (String) logData.get("method"),

@@ -40,6 +40,7 @@ public class EndpointHandler {
     private final AuditLog auditLog;
     /** Resolved on first use, so handlers registered after the controller are still seen. */
     private volatile ParameterHandler[] parameterHandlers;
+    private final String route;
     private final Pattern pathPattern;
     private final int pathVariableCount;
 
@@ -74,6 +75,7 @@ public class EndpointHandler {
         Controller controllerAnnotation = method.getDeclaringClass().getAnnotation(Controller.class);
         String basePath = controllerAnnotation != null ? controllerAnnotation.value() : "";
         String path = normalizePath(basePath + mapping.value());
+        this.route = path;
 
         String regex = path
             .replaceAll("\\*", ".*")
@@ -210,6 +212,11 @@ public class EndpointHandler {
 
     public Parameter[] getParameters() {
         return parameters.clone();
+    }
+
+    /** The path template this endpoint is mapped to, e.g. {@code /users/{id}}. */
+    public String getRoute() {
+        return route;
     }
 
     public boolean matchesPath(String requestUri) {

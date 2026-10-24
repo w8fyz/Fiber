@@ -90,6 +90,10 @@ src/main/java/sh/fyz/fiber/
 │   │   ├── Email.java                          # Email model (to, subject, html, attachments)
 │   │   ├── EmailService.java                   # SMTP sender (async, templates)
 │   │   └── EmailTemplateEngine.java            # {var} substitution, @import, tables
+│   ├── request/
+│   │   ├── RequestListener.java                # Interface: onRequestCompleted, once per routed request
+│   │   ├── CompletedRequest.java               # Record: requestId, method, path, route, status, timing, request
+│   │   └── RequestAttributes.java              # Attribute names: START_NANOS, ROUTE (matched path template)
 │   ├── security/
 │   │   ├── BCryptUtil.java
 │   │   ├── annotations/
@@ -170,6 +174,7 @@ Key configuration methods (call before `start()`):
 - `setTrustedProxies(List<String>)` — IP addresses of trusted reverse proxies (required for X-Forwarded-For)
 - `getRoleRegistry().registerRoleClasses(...)` — role/permission system
 - `addMiddleware(Middleware)` — global middleware
+- `addRequestListener(RequestListener)` / `removeRequestListener(...)` — per-request completion hook (metrics, access logs); may be called while running
 - `registerController(Object)` or `registerController(Class<?>)` — register controllers
 - `preloadDto()` — pre-cache DTOConvertible fields for faster first requests
 - `setMaxFileSize(long)` — max file size in bytes (default 50MB), call before `start()`
@@ -207,7 +212,7 @@ Loaded from `fiberconfig.json` (or env variables prefixed `FIBER_`). Fields:
 
 ### Request Processing Pipeline
 
-For each incoming request, `RouterServlet.service()` executes:
+For each incoming request, `RouterServlet.service()` records the start time (request attribute `RequestAttributes.START_NANOS`), then executes:
 
 1. **OPTIONS** → `CorsService.handlePreflightRequest()` → return
 2. **Route matching** → O(1) HashMap lookup for static routes, linear scan for dynamic routes (path variables/wildcards). Prefer fewest path variables on tie.
@@ -224,6 +229,7 @@ For each incoming request, `RouterServlet.service()` executes:
 9. **Audit log** → if `@AuditLog` present, `AuditLogProcessor.logAuditEvent()` runs **asynchronously on a virtual thread** + `AuditContext` collection
 10. **Rate limit success** → if status 200, `RateLimitProcessor.onSuccess()` resets counter
 11. **Cleanup** → `AuditContext.clear()`, `SessionContext.clear()` in `finally`
+12. **Request listeners** → every `RequestListener` receives a `CompletedRequest` (matched route template, status, duration), whatever the outcome — preflights, 404s, rejections and 500s included
 
 ## Creating Controllers
 
@@ -747,6 +753,8 @@ Sensitive data masking is **recursive** — nested objects and maps containing k
 
 The raw request body is automatically cached by `RequestBodyParameterHandler` and available for audit logging even after the input stream is consumed.
 
+`AuditLog.getTimestamp()` is when the record was taken, once the endpoint has produced its response; `getDurationMs()` is the time since the router received the request (`-1` for a record produced outside the router). Audit records exist only for `@AuditLog` endpoints: to time every request, use a `RequestListener`.
+
 ### Security Headers (automatic)
 
 - `Server: Fiber` (customizable via `setServerHeader()`)
@@ -809,6 +817,28 @@ server.addMiddleware(new TimingMiddleware());
 ```
 
 Middleware list uses `CopyOnWriteArrayList` for thread safety. Middleware executes after authentication/permissions but before parameter resolution.
+
+Middleware only runs for matched endpoints that passed the security pipeline and has no hook after the handler, so it cannot time a request or see its final status — use a request listener for that.
+
+## Request Listeners
+
+Notified once for every request the router handles, whatever its outcome (matched endpoints, 404s, CORS preflights, 401/403/429 rejections, 500s):
+
+```java
+server.addRequestListener(request -> {
+    String route = request.matched() ? request.route() : "UNMATCHED"; // "/users/{id}", bounded
+    recordLatency(request.method(), route, request.status(), request.duration());
+});
+```
+
+`CompletedRequest` fields: `requestId` (same id as the request's log lines), `method`, `path` (request URI without the query string, carries ids), `route` (path template of the matched endpoint, `null` when nothing matched), `status`, `startedAtMillis` (epoch ms), `durationNanos` / `duration()`, and `request` — the `HttpServletRequest` itself (headers, `HttpUtil.getClientIpAddress`), valid only during the callback. `toString()` leaves `request` out, since the container renders it with the query string, which can carry tokens.
+
+- Runs synchronously on the request thread, in registration order, after the response is produced and inside the request's `LogContext` — keep it cheap.
+- A listener that throws (an exception or an error, short of a `VirtualMachineError`) is logged and skipped; the response and the other listeners are unaffected.
+- `status` is the status when the router finished: a client disconnecting mid-response, or a failure Jetty detects after the router returned, is not reflected.
+- The matched route template is also available to any later code as the request attribute `RequestAttributes.ROUTE`.
+- Backed by a `CopyOnWriteArrayList`: listeners can be added and removed while the server runs.
+- Requests Jetty rejects before routing (malformed URI, oversized headers) are not reported.
 
 ## Challenges
 

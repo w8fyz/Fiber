@@ -3,7 +3,10 @@ package sh.fyz.fiber.core.security.logging;
 import java.util.Map;
 
 public class AuditLog {
+    /** When the audit event was recorded, i.e. once the endpoint had produced its response. */
     private final long timestamp;
+    /** Time from the router receiving the request to the audit event, or {@code -1} when unknown. */
+    private final long durationMs;
     private final String ip;
     private final String userAgent;
     private final String method;
@@ -34,7 +37,29 @@ public class AuditLog {
             Map<String, Object> customData,
             String rawLog
     ) {
+        this(timestamp, -1L, ip, userAgent, method, uri, action, status, queryParams, pathVariables,
+                requestBody, parameters, response, customData, rawLog);
+    }
+
+    public AuditLog(
+            long timestamp,
+            long durationMs,
+            String ip,
+            String userAgent,
+            String method,
+            String uri,
+            String action,
+            int status,
+            Map<String, String> queryParams,
+            Map<String, String> pathVariables,
+            Object requestBody,
+            Map<String, Object> parameters,
+            Object response,
+            Map<String, Object> customData,
+            String rawLog
+    ) {
         this.timestamp = timestamp;
+        this.durationMs = durationMs;
         this.ip = ip;
         this.userAgent = userAgent;
         this.method = method;
@@ -51,6 +76,7 @@ public class AuditLog {
     }
 
     public long getTimestamp() { return timestamp; }
+    public long getDurationMs() { return durationMs; }
     public String getIp() { return ip; }
     public String getUserAgent() { return userAgent; }
     public String getMethod() { return method; }

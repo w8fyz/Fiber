@@ -20,6 +20,7 @@ import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.challenge.internal.ChallengeController;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 import sh.fyz.fiber.core.email.EmailService;
+import sh.fyz.fiber.core.request.RequestListener;
 import sh.fyz.fiber.core.security.cors.CorsService;
 import sh.fyz.fiber.core.security.csrf.CsrfController;
 import sh.fyz.fiber.core.security.logging.AuditLogService;
@@ -74,6 +75,7 @@ public class FiberServer {
     private final Server server;
     private final ServletContextHandler context;
     private final List<Middleware> globalMiddleware;
+    private final List<RequestListener> requestListeners = new CopyOnWriteArrayList<>();
     private final EndpointRegistry endpointRegistry;
     private final DocumentationController documentationController;
     private boolean documentationEnabled;
@@ -305,6 +307,21 @@ public class FiberServer {
         globalMiddleware.sort(Comparator.comparingInt(Middleware::priority));
     }
 
+    /**
+     * Registers a listener notified once for every request the router handles, whatever its
+     * outcome — the hook for request metrics and access logs. Listeners may be added or removed
+     * while the server runs. See {@link RequestListener} for the threading contract.
+     */
+    public FiberServer addRequestListener(RequestListener listener) {
+        requestListeners.add(Objects.requireNonNull(listener, "listener"));
+        return this;
+    }
+
+    public FiberServer removeRequestListener(RequestListener listener) {
+        requestListeners.remove(listener);
+        return this;
+    }
+
     public void enableCSRFProtection() {
         this.csrfMiddleware = new CsrfMiddleware();
         getCorsService().addExposedHeader("X-CSRF-TOKEN");
@@ -413,7 +430,7 @@ public class FiberServer {
             }
         }
 
-        ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry));
+        ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry, requestListeners));
         holder.getRegistration().setMultipartConfig(
                 new jakarta.servlet.MultipartConfigElement(
                         System.getProperty("java.io.tmpdir"),

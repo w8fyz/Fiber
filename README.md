@@ -15,6 +15,7 @@ A modern Java 21+ framework for building RESTful APIs on top of Jetty. Minimal b
 - [File Uploads](#file-uploads)
 - [Email](#email)
 - [Middleware](#middleware)
+- [Request Listeners](#request-listeners)
 - [API Documentation](#api-documentation)
 - [Full Example](#full-example)
 
@@ -452,7 +453,7 @@ public class MyAuditLogService extends AuditLogService {
 server.setAuditLogService(new MyAuditLogService());
 ```
 
-The `AuditLog` object contains: `timestamp`, `ip`, `userAgent`, `method`, `uri`, `action`, `status`, `queryParams`, `pathVariables`, `requestBody`, `parameters`, `response`, `customData`, `rawLog`.
+The `AuditLog` object contains: `timestamp`, `durationMs`, `ip`, `userAgent`, `method`, `uri`, `action`, `status`, `queryParams`, `pathVariables`, `requestBody`, `parameters`, `response`, `customData`, `rawLog`. `timestamp` is when the record was taken, once the endpoint has produced its response; `durationMs` is the time from receiving the request to that point. Audit records only exist for `@AuditLog` endpoints — to observe every request, use a [request listener](#request-listeners).
 
 ### Security Headers
 
@@ -509,6 +510,26 @@ server.addMiddleware(new LoggingMiddleware());
 ```
 
 Middleware runs in priority order (lower = earlier) after authentication but before parameter resolution.
+
+## Request Listeners
+
+A `RequestListener` is notified once for every request the router handles, whatever its outcome: matched endpoints, unknown paths (404), CORS preflights, rejected requests (401, 403, 429) and failing handlers (500). It is the hook for request metrics and access logs.
+
+```java
+// e.g. with Micrometer
+server.addRequestListener(request -> Timer.builder("http.server.requests")
+        .tag("method", request.method())
+        // The endpoint's path template ("/users/{id}"), null when nothing matched: aggregate on it
+        // rather than on request.path(), which carries the ids.
+        .tag("route", request.matched() ? request.route() : "UNMATCHED")
+        .tag("status", String.valueOf(request.status()))
+        .register(registry)
+        .record(request.duration()));
+```
+
+`CompletedRequest` carries `requestId` (the id the request was logged under), `method`, `path` (without the query string), `route`, `status`, `startedAtMillis` (epoch milliseconds), `durationNanos` (also as `duration()`), and `request`, the `HttpServletRequest` itself — for headers or the client address (`HttpUtil.getClientIpAddress(request.request())`), valid only during the callback.
+
+Listeners run synchronously on the request thread, in registration order, once the response has been produced: keep them cheap and hand slow work to another thread. A listener that throws is logged and skipped — the response and the other listeners are unaffected. Listeners can be added and removed (`removeRequestListener`) while the server runs. Requests that Jetty rejects before they reach the router (a malformed URI, oversized headers) are not reported.
 
 ## API Documentation
 
