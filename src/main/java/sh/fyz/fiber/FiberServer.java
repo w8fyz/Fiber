@@ -7,7 +7,6 @@ import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
-import sh.fyz.fiber.annotations.request.Controller;
 import sh.fyz.fiber.annotations.request.RequestMapping;
 import sh.fyz.fiber.config.FiberConfig;
 import sh.fyz.fiber.core.authentication.AuthenticationService;
@@ -20,6 +19,7 @@ import sh.fyz.fiber.core.challenge.ChallengeRegistry;
 import sh.fyz.fiber.core.challenge.internal.ChallengeController;
 import sh.fyz.fiber.core.dto.DTOConvertible;
 import sh.fyz.fiber.core.email.EmailService;
+import sh.fyz.fiber.core.request.RequestListener;
 import sh.fyz.fiber.core.security.cors.CorsService;
 import sh.fyz.fiber.core.security.csrf.CsrfController;
 import sh.fyz.fiber.core.security.logging.AuditLogService;
@@ -38,7 +38,6 @@ import sh.fyz.fiber.core.authentication.RoleRegistry;
 import sh.fyz.fiber.core.authentication.AuthResolver;
 import sh.fyz.fiber.core.authentication.impl.BasicAuthenticator;
 import sh.fyz.fiber.core.session.SessionService;
-import sh.fyz.fiber.handler.EndpointHandler;
 import sh.fyz.fiber.util.HttpUtil;
 import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.core.log.FiberLogger;
@@ -74,6 +73,7 @@ public class FiberServer {
     private final Server server;
     private final ServletContextHandler context;
     private final List<Middleware> globalMiddleware;
+    private final List<RequestListener> requestListeners = new CopyOnWriteArrayList<>();
     private final EndpointRegistry endpointRegistry;
     private final DocumentationController documentationController;
     private boolean documentationEnabled;
@@ -272,37 +272,30 @@ public class FiberServer {
     }
 
     public void registerController(Object controller) {
-        Class<?> controllerClass = controller.getClass();
-        Controller annotation = controllerClass.getAnnotation(Controller.class);
-        if (annotation == null) {
-            throw new IllegalArgumentException("Controller class must be annotated with @Controller");
-        }
-
-        String basePath = annotation.value();
-        if (!basePath.startsWith("/")) {
-            basePath = "/" + basePath;
-        }
-
-        for (Method method : controllerClass.getDeclaredMethods()) {
-            RequestMapping requestMapping = method.getAnnotation(RequestMapping.class);
-            if (requestMapping != null) {
-                String path = requestMapping.value();
-                if (!path.startsWith("/")) {
-                    path = "/" + path;
-                }
-                String fullPath = EndpointHandler.normalizePath(basePath + path);
-                endpointRegistry.registerEndpoint(fullPath, requestMapping.method(), method, controller);
-            }
-        }
-
+        endpointRegistry.registerController(controller);
         if (documentationEnabled) {
-            documentationController.registerController(controllerClass);
+            documentationController.registerController(controller.getClass());
         }
     }
 
     public void addMiddleware(Middleware middleware) {
         globalMiddleware.add(middleware);
         globalMiddleware.sort(Comparator.comparingInt(Middleware::priority));
+    }
+
+    /**
+     * Registers a listener notified once for every request the router handles, whatever its
+     * outcome — the hook for request metrics and access logs. Listeners may be added or removed
+     * while the server runs. See {@link RequestListener} for the threading contract.
+     */
+    public FiberServer addRequestListener(RequestListener listener) {
+        requestListeners.add(Objects.requireNonNull(listener, "listener"));
+        return this;
+    }
+
+    public FiberServer removeRequestListener(RequestListener listener) {
+        requestListeners.remove(listener);
+        return this;
     }
 
     public void enableCSRFProtection() {
@@ -413,7 +406,7 @@ public class FiberServer {
             }
         }
 
-        ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry));
+        ServletHolder holder = new ServletHolder(new RouterServlet(endpointRegistry, requestListeners));
         holder.getRegistration().setMultipartConfig(
                 new jakarta.servlet.MultipartConfigElement(
                         System.getProperty("java.io.tmpdir"),

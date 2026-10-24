@@ -27,7 +27,9 @@ import java.lang.reflect.Parameter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Set;
@@ -40,6 +42,7 @@ public class EndpointHandler {
     private final AuditLog auditLog;
     /** Resolved on first use, so handlers registered after the controller are still seen. */
     private volatile ParameterHandler[] parameterHandlers;
+    private final String route;
     private final Pattern pathPattern;
     private final int pathVariableCount;
 
@@ -48,6 +51,15 @@ public class EndpointHandler {
     private final List<Middleware> globalMiddleware;
 
     public EndpointHandler(Object controller, Method method, List<Middleware> globalMiddleware, String[] requiredRoles) {
+        this(controller, method, pathOf(method), globalMiddleware, requiredRoles);
+    }
+
+    /**
+     * @param path the path the endpoint is registered under, so that the route it is looked up by
+     *             and the pattern it matches come from the same string
+     */
+    public EndpointHandler(Object controller, Method method, String path, List<Middleware> globalMiddleware,
+                           String[] requiredRoles) {
         this.controller = controller;
         this.method = method;
         this.parameters = method.getParameters();
@@ -70,10 +82,8 @@ public class EndpointHandler {
 
         this.globalMiddleware = globalMiddleware;
 
-        RequestMapping mapping = method.getAnnotation(RequestMapping.class);
-        Controller controllerAnnotation = method.getDeclaringClass().getAnnotation(Controller.class);
-        String basePath = controllerAnnotation != null ? controllerAnnotation.value() : "";
-        String path = normalizePath(basePath + mapping.value());
+        path = normalizePath(path);
+        this.route = path;
 
         String regex = path
             .replaceAll("\\*", ".*")
@@ -84,6 +94,13 @@ public class EndpointHandler {
         int varCount = 0;
         while (matcher.find()) varCount++;
         this.pathVariableCount = varCount;
+    }
+
+    /** The path declared by the method's {@code @RequestMapping} under its class's {@code @Controller}. */
+    private static String pathOf(Method method) {
+        Controller controllerAnnotation = method.getDeclaringClass().getAnnotation(Controller.class);
+        String basePath = controllerAnnotation != null ? controllerAnnotation.value() : "";
+        return joinPath(basePath, method.getAnnotation(RequestMapping.class).value());
     }
 
     private static Set<AuthScheme> computeAcceptedAuthSchemes(Method method) {
@@ -132,7 +149,8 @@ public class EndpointHandler {
         }
 
         if (auditLog != null) {
-            AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, invocation.args(), invocation.result());
+            AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, invocation.args(), invocation.result(),
+                    pathVariables(req.getRequestURI()));
         }
         if (rateLimit != null && resp.getStatus() == HttpServletResponse.SC_OK) {
             RateLimitProcessor.reset(rateLimit, method, invocation.args(), req);
@@ -181,6 +199,25 @@ public class EndpointHandler {
         }
     }
 
+    /**
+     * The raw values of this endpoint's {@code {name}} segments in {@code requestUri}, in path order,
+     * read with the pattern the request was routed by. Empty when the route declares none.
+     */
+    private Map<String, String> pathVariables(String requestUri) {
+        if (pathVariableCount == 0) {
+            return Map.of();
+        }
+        Matcher matcher = pathPattern.matcher(requestUri);
+        if (!matcher.matches()) {
+            return Map.of();
+        }
+        Map<String, String> variables = new LinkedHashMap<>();
+        matcher.namedGroups().entrySet().stream()
+                .sorted(Map.Entry.comparingByValue())
+                .forEach(group -> variables.put(group.getKey(), matcher.group(group.getValue())));
+        return variables;
+    }
+
     private boolean rejectRateLimited(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         ResponseEntity<?> tooManyRequests = RateLimitProcessor.check(rateLimit, method, null, req);
         if (tooManyRequests == null) {
@@ -212,6 +249,11 @@ public class EndpointHandler {
         return parameters.clone();
     }
 
+    /** The path template this endpoint is mapped to, e.g. {@code /users/{id}}. */
+    public String getRoute() {
+        return route;
+    }
+
     public boolean matchesPath(String requestUri) {
         return pathPattern.matcher(requestUri).matches();
     }
@@ -228,14 +270,21 @@ public class EndpointHandler {
         return pathPattern;
     }
 
+    /** Rooted, with single separators and no trailing slash: {@code api//users/} becomes {@code /api/users}. */
     public static String normalizePath(String path) {
-        String normalized = path.replaceAll("/{2,}", "/");
+        String normalized = ("/" + (path == null ? "" : path)).replaceAll("/{2,}", "/");
         if (normalized.length() > 1 && normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
-        if (normalized.isEmpty()) {
-            normalized = "/";
-        }
         return normalized;
+    }
+
+    /**
+     * The path an endpoint is served at: a {@code @Controller} base path and a {@code @RequestMapping}
+     * value joined by a separator, then normalized, so either may be written with or without a
+     * leading slash ({@code "api"} and {@code "users"} give {@code /api/users}).
+     */
+    public static String joinPath(String basePath, String path) {
+        return normalizePath((basePath == null ? "" : basePath) + "/" + (path == null ? "" : path));
     }
 }

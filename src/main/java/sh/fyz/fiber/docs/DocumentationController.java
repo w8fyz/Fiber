@@ -2,6 +2,7 @@ package sh.fyz.fiber.docs;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import sh.fyz.fiber.handler.EndpointHandler;
 import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.core.log.FiberLog;
 import sh.fyz.fiber.FiberServer;
@@ -49,7 +50,7 @@ public class DocumentationController {
 
     public void registerController(Class<?> controllerClass) {
         String basePath = controllerClass.getAnnotation(Controller.class).value();
-        if (filterInternal && basePath != null && basePath.startsWith("/internal")) {
+        if (filterInternal && EndpointHandler.normalizePath(basePath).startsWith("/internal")) {
             // Internal endpoints are hidden from the published docs.
             return;
         }

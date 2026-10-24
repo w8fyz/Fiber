@@ -2,10 +2,14 @@ package sh.fyz.fiber;
 
 import org.junit.jupiter.api.*;
 import sh.fyz.fiber.core.security.logging.AuditLog;
+import sh.fyz.fiber.test.TestController;
 
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -74,6 +78,7 @@ public class AuditLogTest extends IntegrationTestBase {
         assertNotNull(log, "Audit log should still be captured without custom data");
         assertEquals("SIMPLE_READ", log.getAction());
         assertNull(log.getCustomData(), "Custom data should be null when AuditContext is not used");
+        assertNull(log.getPathVariables(), "A route without variables records none");
     }
 
     @Test
@@ -90,5 +95,37 @@ public class AuditLogTest extends IntegrationTestBase {
         assertNotNull(log);
         assertTrue(log.getTimestamp() >= before, "Timestamp should be around request time");
         assertNotNull(log.getIp(), "IP should be captured");
+    }
+
+    @Test
+    @Order(6)
+    void testAuditLogDurationCoversTheHandler() throws Exception {
+        auditLogService.clear();
+        HttpResponse<String> resp = get("/test/slow");
+        assertEquals(200, resp.statusCode());
+
+        AuditLog log = await().atMost(Duration.ofSeconds(5))
+                .until(auditLogService::getLastLog, Objects::nonNull);
+        assertEquals("SLOW_READ", log.getAction());
+        assertTrue(log.getDurationMs() >= TestController.SLOW_ENDPOINT_MILLIS,
+                "Duration should cover the handler, was " + log.getDurationMs() + " ms");
+        assertTrue(log.getRawLog().contains("\"durationMs\":" + log.getDurationMs()),
+                "The serialized record should carry the same duration");
+    }
+
+    @Test
+    @Order(7)
+    void testAuditLogPathVariablesAreTheOnesTheRequestWasRoutedWith() throws Exception {
+        auditLogService.clear();
+        HttpResponse<String> resp = get("/audit-vars/acme/42");
+        assertEquals(200, resp.statusCode(), resp.body());
+
+        AuditLog log = await().atMost(Duration.ofSeconds(5))
+                .until(auditLogService::getLastLog, Objects::nonNull);
+        assertEquals("PATH_VARS", log.getAction());
+        // The base path's variable is included, and the mapping's leading variable reads its own segment.
+        assertEquals(Map.of("tenant", "acme", "id", "42"), log.getPathVariables());
+        assertTrue(log.getRawLog().contains("\"pathVariables\":{\"tenant\":\"acme\",\"id\":\"42\"}"),
+                "The serialized record lists them in path order: " + log.getRawLog());
     }
 }

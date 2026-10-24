@@ -188,6 +188,21 @@ public class TestController {
         return Map.of("status", "ok");
     }
 
+    /** How long {@code /test/slow} takes at least, so tests can assert a measured duration. */
+    public static final long SLOW_ENDPOINT_MILLIS = 150;
+
+    @RequestMapping(value = "/slow", method = RequestMapping.Method.GET)
+    @AuditLog(action = "SLOW_READ", logParameters = false, logResult = false)
+    public Map<String, String> slow() throws InterruptedException {
+        Thread.sleep(SLOW_ENDPOINT_MILLIS);
+        return Map.of("status", "ok");
+    }
+
+    @RequestMapping(value = "/fail", method = RequestMapping.Method.GET)
+    public Map<String, String> fail() {
+        throw new RuntimeException("Intentional handler failure");
+    }
+
     @RequestMapping(value = "/rate-limited-sliding", method = RequestMapping.Method.GET)
     @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES, slidingWindow = true)
     public ResponseEntity<Map<String, String>> rateLimitedSliding() {

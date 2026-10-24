@@ -5,8 +5,7 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import sh.fyz.fiber.FiberServer;
-import sh.fyz.fiber.annotations.request.Controller;
-import sh.fyz.fiber.annotations.request.RequestMapping;
+import sh.fyz.fiber.core.request.RequestAttributes;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.upload.UploadedFile;
 import sh.fyz.fiber.util.JsonUtil;
@@ -19,32 +18,24 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Asynchronously serialises audit events to SLF4J and {@link AuditLogService}.
  *
- * <p>Hot paths cache per-method reflection (controller path + compiled regex)
- * and reuse the Fiber shared executor when available so that a single
- * audit-heavy endpoint does not spawn thousands of ad-hoc threads.</p>
+ * <p>Hot paths cache per-method reflection (parameters) and reuse the Fiber
+ * shared executor when available so that a single audit-heavy endpoint does
+ * not spawn thousands of ad-hoc threads.</p>
  */
 public class AuditLogProcessor {
     private static final FiberLogger logger = FiberLog.get(AuditLogProcessor.class);
 
     public static final String RAW_BODY_ATTRIBUTE = "fiber.rawBody";
 
-    private static final Pattern PATH_VAR_PATTERN = Pattern.compile("\\{([^}]+)}");
-
-    // Per-method caches to avoid repeated annotation lookup / regex compilation.
-    private static final Map<Method, MethodPathInfo> methodPathCache = new ConcurrentHashMap<>();
+    // Per-method cache to avoid repeated reflection.
     private static final Map<Method, Parameter[]> parameterCache = new ConcurrentHashMap<>();
 
     private static final ExecutorService fallbackExecutor = Executors.newVirtualThreadPerTaskExecutor();
-
-    private record MethodPathInfo(List<String> variableNames, Pattern pathPattern) {
-        static final MethodPathInfo NONE = new MethodPathInfo(List.of(), null);
-    }
 
     private static ExecutorService resolveExecutor() {
         try {
@@ -58,9 +49,28 @@ public class AuditLogProcessor {
         return fallbackExecutor;
     }
 
-    @SuppressWarnings("unchecked")
+    /**
+     * Records no path variables: only the endpoint knows the pattern the request was routed by.
+     *
+     * @deprecated use the overload taking the request's path variables
+     */
+    @Deprecated
     public static void logAuditEvent(HttpServletRequest req, HttpServletResponse resp, AuditLog auditLog, Method method, Object[] args, Object result) {
+        logAuditEvent(req, resp, auditLog, method, args, result, Map.of());
+    }
+
+    /**
+     * @param pathVariables the values of the route's {@code {name}} segments, as the endpoint matched
+     *                      them; recorded under {@code pathVariables} when not empty
+     */
+    @SuppressWarnings("unchecked")
+    public static void logAuditEvent(HttpServletRequest req, HttpServletResponse resp, AuditLog auditLog, Method method,
+                                     Object[] args, Object result, Map<String, String> pathVariables) {
+        // Copied in order: the record lists the variables as the path does.
+        Map<String, String> recordedPathVariables = pathVariables == null
+                ? new LinkedHashMap<>() : new LinkedHashMap<>(pathVariables);
         long timestamp = System.currentTimeMillis();
+        long durationMs = elapsedMillis(req);
         String ip = req.getRemoteAddr();
         String userAgent = req.getHeader("User-Agent");
         String httpMethod = req.getMethod();
@@ -89,40 +99,27 @@ public class AuditLogProcessor {
 
         resolveExecutor().submit(() -> {
             try {
-                processAuditLog(timestamp, ip, userAgent, httpMethod, uri, status, parameterMap,
-                        rawBody, customData, auditLog, method, loggedArgs, result);
+                processAuditLog(timestamp, durationMs, ip, userAgent, httpMethod, uri, status, parameterMap,
+                        recordedPathVariables, rawBody, customData, auditLog, method, loggedArgs, result);
             } catch (Exception e) {
                 logger.error("Failed to process audit log", e);
             }
         });
     }
 
-    private static MethodPathInfo pathInfoFor(Method method) {
-        return methodPathCache.computeIfAbsent(method, m -> {
-            if (m.getDeclaringClass().getAnnotation(Controller.class) == null) {
-                return MethodPathInfo.NONE;
-            }
-            RequestMapping rm = m.getAnnotation(RequestMapping.class);
-            if (rm == null || rm.value() == null || rm.value().isBlank()) {
-                return MethodPathInfo.NONE;
-            }
-            String path = rm.value();
-            Matcher matcher = PATH_VAR_PATTERN.matcher(path);
-            List<String> vars = new ArrayList<>();
-            while (matcher.find()) {
-                vars.add(matcher.group(1));
-            }
-            if (vars.isEmpty()) {
-                return MethodPathInfo.NONE;
-            }
-            String regex = PATH_VAR_PATTERN.matcher(path).replaceAll("([^/]+)");
-            return new MethodPathInfo(List.copyOf(vars), Pattern.compile(regex));
-        });
+    /** Time since the router received the request, or {@code -1} when the request did not go through it. */
+    private static long elapsedMillis(HttpServletRequest req) {
+        Object startNanos = req.getAttribute(RequestAttributes.START_NANOS);
+        if (startNanos instanceof Long start) {
+            return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+        }
+        return -1L;
     }
 
     @SuppressWarnings("unchecked")
-    private static void processAuditLog(long timestamp, String ip, String userAgent, String httpMethod,
+    private static void processAuditLog(long timestamp, long durationMs, String ip, String userAgent, String httpMethod,
                                          String uri, int status, Map<String, String[]> parameterMap,
+                                         Map<String, String> pathVariables,
                                          String rawBody, Map<String, Object> customData,
                                          AuditLog auditLog, Method method, Object[] args, Object result) {
         Map<String, Object> logData = new LinkedHashMap<>();
@@ -134,6 +131,9 @@ public class AuditLogProcessor {
         logData.put("uri", uri);
         logData.put("action", auditLog.action());
         logData.put("status", status);
+        if (durationMs >= 0) {
+            logData.put("durationMs", durationMs);
+        }
 
         if (!parameterMap.isEmpty()) {
             Map<String, String> queryParams = new HashMap<>(parameterMap.size());
@@ -147,22 +147,8 @@ public class AuditLogProcessor {
             }
         }
 
-        MethodPathInfo info = pathInfoFor(method);
-        if (info.pathPattern() != null) {
-            try {
-                Matcher m = info.pathPattern().matcher(uri);
-                if (m.find()) {
-                    Map<String, String> pathVars = new HashMap<>();
-                    for (int i = 0; i < info.variableNames().size() && i < m.groupCount(); i++) {
-                        pathVars.put(info.variableNames().get(i), m.group(i + 1));
-                    }
-                    if (!pathVars.isEmpty()) {
-                        logData.put("pathVariables", pathVars);
-                    }
-                }
-            } catch (Exception e) {
-                logger.warn("Could not extract path variables", e);
-            }
+        if (!pathVariables.isEmpty()) {
+            logData.put("pathVariables", pathVariables);
         }
 
         if (("POST".equals(httpMethod) || "PUT".equals(httpMethod) || "PATCH".equals(httpMethod))
@@ -246,6 +232,7 @@ public class AuditLogProcessor {
 
                 service.onAuditLog(new sh.fyz.fiber.core.security.logging.AuditLog(
                     (Long) logData.get("timestamp"),
+                    durationMs,
                     (String) logData.get("ip"),
                     (String) logData.get("userAgent"),
                     (String) logData.get("method"),
@@ -285,9 +272,8 @@ public class AuditLogProcessor {
         }
     }
 
-    /** Visible for testing — clears per-method reflection caches. */
+    /** Visible for testing — clears the per-method reflection cache. */
     public static void clearCaches() {
-        methodPathCache.clear();
         parameterCache.clear();
     }
 }
