@@ -354,39 +354,40 @@ Annotation-based rate limiting with fixed or sliding window, per-IP or per-user,
 public ResponseEntity<?> login(...) { ... }
 
 // Sliding window — more accurate counting than fixed window
-@RateLimit(attempts = 100, timeout = 1, unit = TimeUnit.HOURS, slidingWindow = true)
+@RateLimit(attempts = 100, timeout = 1, unit = TimeUnit.HOURS, slidingWindow = true, resetOnSuccess = false)
 @RequestMapping(value = "/api/search", method = RequestMapping.Method.GET)
 public ResponseEntity<?> search(...) { ... }
 
 // Per-user — keyed by authenticated userId instead of IP
-@RateLimit(attempts = 10, timeout = 1, unit = TimeUnit.MINUTES, perUser = true)
+@RateLimit(attempts = 10, timeout = 1, unit = TimeUnit.MINUTES, perUser = true, resetOnSuccess = false)
 @RequestMapping(value = "/api/export", method = RequestMapping.Method.GET)
 public ResponseEntity<?> export(@AuthenticatedUser User user) { ... }
 
-// Shared bucket — group multiple endpoints under the same limit
-@RateLimit(attempts = 50, timeout = 1, unit = TimeUnit.HOURS, key = "api-write")
+// Shared bucket — group multiple endpoints under the same limit (declare it the same way on each)
+@RateLimit(attempts = 50, timeout = 1, unit = TimeUnit.HOURS, key = "api-write", resetOnSuccess = false)
 @RequestMapping(value = "/api/posts", method = RequestMapping.Method.POST)
 public ResponseEntity<?> createPost(...) { ... }
 
-@RateLimit(attempts = 50, timeout = 1, unit = TimeUnit.HOURS, key = "api-write")
+@RateLimit(attempts = 50, timeout = 1, unit = TimeUnit.HOURS, key = "api-write", resetOnSuccess = false)
 @RequestMapping(value = "/api/comments", method = RequestMapping.Method.POST)
 public ResponseEntity<?> createComment(...) { ... }
 
 // Class-level — applies to all endpoints in the controller
 @Controller("/api/heavy")
-@RateLimit(attempts = 20, timeout = 1, unit = TimeUnit.MINUTES)
+@RateLimit(attempts = 20, timeout = 1, unit = TimeUnit.MINUTES, resetOnSuccess = false)
 public class HeavyController { ... }
 ```
 
 | Attribute | Default | Description |
 |-----------|---------|-------------|
-| `attempts` | `5` | Max requests per window |
+| `attempts` | `5` | Max requests per window (with `resetOnSuccess`, since the last 200) |
 | `timeout` | `15` | Window duration |
 | `unit` | `MINUTES` | Time unit for timeout |
 | `message` | `"Too many attempts..."` | Custom 429 error message |
 | `slidingWindow` | `false` | Use sliding window instead of fixed |
 | `perUser` | `false` | Key by userId (falls back to IP if unauthenticated) |
-| `key` | `""` | Shared bucket key across endpoints |
+| `key` | `""` | Shared bucket key across endpoints (give them the same `resetOnSuccess`) |
+| `resetOnSuccess` | `true` | Clear the counter on a 200 response; `false` counts successful requests too |
 
 When exceeded, returns 429 with a `Retry-After` header (seconds) and a JSON body:
 
@@ -394,7 +395,7 @@ When exceeded, returns 429 with a `Retry-After` header (seconds) and a JSON body
 {"status": 429, "message": "Too many attempts. Please try again later.", "retryAfter": 42}
 ```
 
-Rate limiting is proxy-aware (X-Forwarded-For, X-Real-IP). The counter resets on a 200 response.
+Rate limiting is proxy-aware (X-Forwarded-For, X-Real-IP). By default a 200 response clears the client's counter, so only requests answered with another status add up, as failed logins do; any 200 from that client (IP, or user with `perUser`) clears it, and a success answered otherwise (201, 204, a redirect) still counts. Set `resetOnSuccess = false` to cap every request, successful ones included: without it, a limit on an endpoint that answers 200 never applies.
 
 ### Audit Logging
 

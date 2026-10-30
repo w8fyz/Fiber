@@ -60,4 +60,35 @@ public class RateLimitTest extends IntegrationTestBase {
         HttpResponse<String> resp = get("/test/rate-limited-sliding");
         assertEquals(429, resp.statusCode(), "Sliding window should block after max attempts, body: " + resp.body());
     }
+
+    @Test
+    @Order(7)
+    void testSuccessResetsTheCounterByDefault() throws Exception {
+        for (int i = 0; i < 6; i++) {
+            HttpResponse<String> resp = get("/test/rate-limited-success");
+            assertEquals(200, resp.statusCode(), "Successful request " + (i + 1) + " resets the counter");
+        }
+    }
+
+    @Test
+    @Order(8)
+    void testSuccessCountsWhenResetOnSuccessIsDisabled() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            HttpResponse<String> resp = get("/test/rate-limited-no-reset");
+            assertEquals(200, resp.statusCode(), "Request " + (i + 1) + " is within the limit");
+        }
+        HttpResponse<String> resp = get("/test/rate-limited-no-reset");
+        assertEquals(429, resp.statusCode(), "Successful requests count too, body: " + resp.body());
+    }
+
+    @Test
+    @Order(9)
+    void testSuccessCountsInASlidingWindowWhenResetOnSuccessIsDisabled() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            HttpResponse<String> resp = get("/test/rate-limited-sliding-no-reset");
+            assertEquals(200, resp.statusCode(), "Request " + (i + 1) + " is within the limit");
+        }
+        HttpResponse<String> resp = get("/test/rate-limited-sliding-no-reset");
+        assertEquals(429, resp.statusCode(), "Successful requests count too, body: " + resp.body());
+    }
 }

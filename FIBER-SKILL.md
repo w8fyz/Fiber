@@ -98,7 +98,7 @@ src/main/java/sh/fyz/fiber/
 │   │   ├── BCryptUtil.java
 │   │   ├── annotations/
 │   │   │   ├── AuditLog.java                   # @AuditLog(action, logParameters, mask...)
-│   │   │   └── RateLimit.java                  # @RateLimit(attempts, timeout, unit)
+│   │   │   └── RateLimit.java                  # @RateLimit(attempts, timeout, unit, resetOnSuccess...)
 │   │   ├── cors/CorsService.java               # Fluent CORS configuration (safe wildcard matching)
 │   │   ├── csrf/CsrfController.java            # GET /internal/csrf/token
 │   │   ├── filters/SecurityHeadersFilter.java  # Auto security headers
@@ -227,7 +227,7 @@ For each incoming request, `RouterServlet.service()` records the start time (req
 7. **Parameter resolution** → `ParameterResolver` iterates `ParameterHandlerRegistry` handlers
 8. **Method invocation** → controller method called via reflection
 9. **Audit log** → if `@AuditLog` present, `AuditLogProcessor.logAuditEvent()` runs **asynchronously on a virtual thread** + `AuditContext` collection
-10. **Rate limit success** → if status 200, `RateLimitProcessor.onSuccess()` resets counter
+10. **Rate limit success** → if status 200 and `resetOnSuccess` (default `true`), the counter is reset
 11. **Cleanup** → `AuditContext.clear()`, `SessionContext.clear()` in `finally`
 12. **Request listeners** → every `RequestListener` receives a `CompletedRequest` (matched route template, status, duration), whatever the outcome — preflights, 404s, rejections and 500s included
 
@@ -720,27 +720,30 @@ function App() {
 Annotation-based rate limiting with two algorithms (fixed window, sliding window), keyed by IP or by authenticated user. Rate limit state is stored in **Caffeine bounded caches** (max 100k entries) to prevent memory exhaustion under DDoS.
 
 ```java
-// Basic — fixed window, IP-based
+// Basic — fixed window, IP-based; a 200 resets the counter, so only non-200 answers are limited (failed logins)
 @RateLimit(attempts = 10, timeout = 1, unit = TimeUnit.MINUTES)
 
+// Count successful requests too — needed to cap an endpoint that answers 200
+@RateLimit(attempts = 20, timeout = 1, unit = TimeUnit.MINUTES, resetOnSuccess = false)
+
 // Sliding window — more accurate for bursty traffic
-@RateLimit(attempts = 100, timeout = 1, unit = TimeUnit.HOURS, slidingWindow = true)
+@RateLimit(attempts = 100, timeout = 1, unit = TimeUnit.HOURS, slidingWindow = true, resetOnSuccess = false)
 
 // Per-user — falls back to IP if unauthenticated
-@RateLimit(attempts = 10, timeout = 5, unit = TimeUnit.MINUTES, perUser = true)
+@RateLimit(attempts = 10, timeout = 5, unit = TimeUnit.MINUTES, perUser = true, resetOnSuccess = false)
 
-// Shared bucket across endpoints
-@RateLimit(attempts = 50, timeout = 1, unit = TimeUnit.HOURS, key = "writes")
+// Shared bucket across endpoints — one counter: declare the same resetOnSuccess on each
+@RateLimit(attempts = 50, timeout = 1, unit = TimeUnit.HOURS, key = "writes", resetOnSuccess = false)
 
 // Class-level — applies to all methods in the controller
 @Controller("/api/heavy")
-@RateLimit(attempts = 20, timeout = 1, unit = TimeUnit.MINUTES)
+@RateLimit(attempts = 20, timeout = 1, unit = TimeUnit.MINUTES, resetOnSuccess = false)
 public class HeavyController { ... }
 ```
 
 Returns 429 with `Retry-After` header and JSON body `{"status":429, "message":"...", "retryAfter": <seconds>}`.
 
-Rate limit identifiers are consistent between `process()` and `onSuccess()` — both use the same `resolveIdentifier()` logic. `RateLimitInterceptor.clearAll()` for testing.
+Rate limit identifiers are consistent between `check()` and `reset()` (and `process()` / `onSuccess()`, which resolve the annotation first) — all use the same `resolveIdentifier()` logic. `onSuccess()` and the automatic reset on 200 are skipped when `resetOnSuccess = false`; `reset()` always clears. `RateLimitInterceptor.clearAll()` for testing.
 
 ### Audit Logging
 

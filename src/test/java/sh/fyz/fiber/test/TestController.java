@@ -212,6 +212,24 @@ public class TestController {
         throw new RuntimeException("Intentional handler failure");
     }
 
+    @RequestMapping(value = "/rate-limited-success", method = RequestMapping.Method.GET)
+    @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES)
+    public Map<String, String> rateLimitedSuccess() {
+        return Map.of("status", "ok");
+    }
+
+    @RequestMapping(value = "/rate-limited-no-reset", method = RequestMapping.Method.GET)
+    @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES, resetOnSuccess = false)
+    public Map<String, String> rateLimitedNoReset() {
+        return Map.of("status", "ok");
+    }
+
+    @RequestMapping(value = "/rate-limited-sliding-no-reset", method = RequestMapping.Method.GET)
+    @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES, slidingWindow = true, resetOnSuccess = false)
+    public Map<String, String> rateLimitedSlidingNoReset() {
+        return Map.of("status", "ok");
+    }
+
     @RequestMapping(value = "/rate-limited-sliding", method = RequestMapping.Method.GET)
     @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES, slidingWindow = true)
     public ResponseEntity<Map<String, String>> rateLimitedSliding() {
