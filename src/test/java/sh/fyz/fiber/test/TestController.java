@@ -188,6 +188,15 @@ public class TestController {
         return Map.of("status", "ok");
     }
 
+    /** Reads the multipart body itself, as a streaming upload library does, leaving the container nothing to parse. */
+    @RequestMapping(value = "/audited-raw-upload", method = RequestMapping.Method.POST)
+    @NoCSRF
+    @AuditLog(action = "RAW_UPLOAD", logParameters = false, logResult = false)
+    public Map<String, Object> auditedRawUpload(HttpServletRequest request) throws IOException {
+        long read = request.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+        return Map.of("read", read);
+    }
+
     /** How long {@code /test/slow} takes at least, so tests can assert a measured duration. */
     public static final long SLOW_ENDPOINT_MILLIS = 150;
 
