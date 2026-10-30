@@ -120,4 +120,28 @@ class RateLimitCaseTest {
         assertThrows(RateLimitExceededException.class,
                 () -> RateLimitInterceptor.checkRateLimit("dave", m));
     }
+
+    @RateLimit(attempts = 2, timeout = 60, unit = TimeUnit.SECONDS)
+    public void resettable() {}
+
+    @RateLimit(attempts = 2, timeout = 60, unit = TimeUnit.SECONDS, resetOnSuccess = false)
+    public void notResettable() {}
+
+    @Test
+    void onSuccessHonoursResetOnSuccess() throws Exception {
+        HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(request.getRemoteAddr()).thenReturn("10.0.0.1");
+
+        Method resettable = RateLimitCaseTest.class.getMethod("resettable");
+        assertNull(RateLimitProcessor.process(resettable, null, request));
+        assertNull(RateLimitProcessor.process(resettable, null, request));
+        RateLimitProcessor.onSuccess(resettable, request);
+        assertNull(RateLimitProcessor.process(resettable, null, request), "the success cleared the counter");
+
+        Method notResettable = RateLimitCaseTest.class.getMethod("notResettable");
+        assertNull(RateLimitProcessor.process(notResettable, null, request));
+        assertNull(RateLimitProcessor.process(notResettable, null, request));
+        RateLimitProcessor.onSuccess(notResettable, request);
+        assertNotNull(RateLimitProcessor.process(notResettable, null, request), "the success still counted");
+    }
 }

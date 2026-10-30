@@ -76,7 +76,7 @@ public class AuditLogProcessor {
         String httpMethod = req.getMethod();
         String uri = req.getRequestURI();
         int status = resp.getStatus();
-        Map<String, String[]> parameterMap = new HashMap<>(req.getParameterMap());
+        Map<String, String[]> parameterMap = parameters(req);
         String rawBody = (String) req.getAttribute(RAW_BODY_ATTRIBUTE);
         Map<String, Object> customData = AuditContext.getAll();
         // The request/response objects are recycled once the request completes and are
@@ -105,6 +105,26 @@ public class AuditLogProcessor {
                 logger.error("Failed to process audit log", e);
             }
         });
+    }
+
+    /**
+     * The request's parameters, less those the container cannot read: a multipart body the endpoint parsed
+     * itself (a streaming upload library) is consumed, and Jetty fails with "bad multipart"; a malformed
+     * query string fails with "Bad query". Jetty remembers a failed extraction and leaves it out of the next
+     * call, so retrying returns what it could still read, and the audit record is never lost to it.
+     */
+    private static Map<String, String[]> parameters(HttpServletRequest req) {
+        // Jetty fails at most once for the body and once for the query string, then succeeds; a failure
+        // it does not remember (a broken chunked body) fails every time and leaves the parameters out.
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return new HashMap<>(req.getParameterMap());
+            } catch (RuntimeException e) {
+                logger.debug("Audit of {} {} leaves out parameters the request could not provide: {}",
+                        req.getMethod(), req.getRequestURI(), e.getMessage());
+            }
+        }
+        return new HashMap<>();
     }
 
     /** Time since the router received the request, or {@code -1} when the request did not go through it. */

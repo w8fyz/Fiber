@@ -188,6 +188,15 @@ public class TestController {
         return Map.of("status", "ok");
     }
 
+    /** Reads the multipart body itself, as a streaming upload library does, leaving the container nothing to parse. */
+    @RequestMapping(value = "/audited-raw-upload", method = RequestMapping.Method.POST)
+    @NoCSRF
+    @AuditLog(action = "RAW_UPLOAD", logParameters = false, logResult = false)
+    public Map<String, Object> auditedRawUpload(HttpServletRequest request) throws IOException {
+        long read = request.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+        return Map.of("read", read);
+    }
+
     /** How long {@code /test/slow} takes at least, so tests can assert a measured duration. */
     public static final long SLOW_ENDPOINT_MILLIS = 150;
 
@@ -201,6 +210,24 @@ public class TestController {
     @RequestMapping(value = "/fail", method = RequestMapping.Method.GET)
     public Map<String, String> fail() {
         throw new RuntimeException("Intentional handler failure");
+    }
+
+    @RequestMapping(value = "/rate-limited-success", method = RequestMapping.Method.GET)
+    @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES)
+    public Map<String, String> rateLimitedSuccess() {
+        return Map.of("status", "ok");
+    }
+
+    @RequestMapping(value = "/rate-limited-no-reset", method = RequestMapping.Method.GET)
+    @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES, resetOnSuccess = false)
+    public Map<String, String> rateLimitedNoReset() {
+        return Map.of("status", "ok");
+    }
+
+    @RequestMapping(value = "/rate-limited-sliding-no-reset", method = RequestMapping.Method.GET)
+    @RateLimit(attempts = 3, timeout = 1, unit = TimeUnit.MINUTES, slidingWindow = true, resetOnSuccess = false)
+    public Map<String, String> rateLimitedSlidingNoReset() {
+        return Map.of("status", "ok");
     }
 
     @RequestMapping(value = "/rate-limited-sliding", method = RequestMapping.Method.GET)

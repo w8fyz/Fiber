@@ -60,8 +60,12 @@ public class RateLimitProcessor {
         onSuccess(method, null, request);
     }
 
+    /** Clears the counter after a successful attempt, unless the limit is declared with {@code resetOnSuccess = false}. */
     public static void onSuccess(Method method, Object[] args, HttpServletRequest request) {
-        reset(RateLimitInterceptor.resolveRateLimit(method), method, args, request);
+        RateLimit rateLimit = RateLimitInterceptor.resolveRateLimit(method);
+        if (rateLimit != null && rateLimit.resetOnSuccess()) {
+            reset(rateLimit, method, args, request);
+        }
     }
 
     public static void reset(RateLimit rateLimit, Method method, Object[] args, HttpServletRequest request) {

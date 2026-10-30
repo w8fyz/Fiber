@@ -33,4 +33,12 @@ public @interface RateLimit {
 
     /** Optional logical key to group multiple endpoints under the same rate-limit bucket. */
     String key() default "";
+
+    /**
+     * If true, a 200 response clears the counter, so only failed attempts add up (a login form).
+     * Set it to false to cap every request, successful ones included (an upload, an expensive call).
+     * Endpoints sharing a {@link #key()} share one counter: give them the same value, or a 200 from one
+     * that resets clears the count of the ones that do not.
+     */
+    boolean resetOnSuccess() default true;
 }

@@ -4,7 +4,12 @@ import org.junit.jupiter.api.*;
 import sh.fyz.fiber.core.security.logging.AuditLog;
 import sh.fyz.fiber.test.TestController;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.Socket;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
@@ -127,5 +132,73 @@ public class AuditLogTest extends IntegrationTestBase {
         assertEquals(Map.of("tenant", "acme", "id", "42"), log.getPathVariables());
         assertTrue(log.getRawLog().contains("\"pathVariables\":{\"tenant\":\"acme\",\"id\":\"42\"}"),
                 "The serialized record lists them in path order: " + log.getRawLog());
+    }
+
+    @Test
+    @Order(8)
+    void testAuditLogOfAMultipartBodyTheEndpointConsumed() throws Exception {
+        auditLogService.clear();
+        HttpResponse<String> resp = postMultipart("/test/audited-raw-upload?directory=%2Fplugins&tag=a&tag=b",
+                "file", "a.jar", "application/java-archive", new byte[2048]);
+        assertEquals(200, resp.statusCode(), resp.body());
+
+        AuditLog log = awaitLog("RAW_UPLOAD");
+        // The body can no longer be read for parameters: the query string still is.
+        assertEquals(Map.of("directory", "/plugins", "tag", "a"), log.getQueryParams());
+    }
+
+    @Test
+    @Order(9)
+    void testAuditLogOfAMalformedQueryString() throws Exception {
+        auditLogService.clear();
+        assertTrue(rawRequest("GET /test/audited-no-custom?x=%zz", null).startsWith("HTTP/1.1 200"));
+
+        AuditLog log = awaitLog("SIMPLE_READ");
+        assertNull(log.getQueryParams(), "A query string Jetty cannot decode is left out");
+    }
+
+    @Test
+    @Order(10)
+    void testAuditLogOfAConsumedMultipartBodyWithAMalformedQueryString() throws Exception {
+        auditLogService.clear();
+        String boundary = "FiberRawBoundary";
+        String body = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"a.jar\"\r\n"
+                + "Content-Type: application/java-archive\r\n\r\n"
+                + "content\r\n--" + boundary + "--\r\n";
+        String status = rawRequest("POST /test/audited-raw-upload?directory=100%",
+                Map.entry("multipart/form-data; boundary=" + boundary, body));
+        assertTrue(status.startsWith("HTTP/1.1 200"), status);
+
+        AuditLog log = awaitLog("RAW_UPLOAD");
+        assertNull(log.getQueryParams(), "Neither the body nor the query string can be read");
+    }
+
+    private AuditLog awaitLog(String action) {
+        return await().atMost(Duration.ofSeconds(5)).until(
+                () -> auditLogService.getLogs().stream().filter(l -> action.equals(l.getAction())).findFirst().orElse(null),
+                Objects::nonNull);
+    }
+
+    /** Sends the request line verbatim (java.net.URI refuses a malformed escape) and returns the status line. */
+    private String rawRequest(String requestLine, Map.Entry<String, String> contentTypeAndBody) throws Exception {
+        byte[] body = contentTypeAndBody == null ? new byte[0]
+                : contentTypeAndBody.getValue().getBytes(StandardCharsets.UTF_8);
+        StringBuilder head = new StringBuilder(requestLine).append(" HTTP/1.1\r\n")
+                .append("Host: localhost:").append(PORT).append("\r\n")
+                .append("Connection: close\r\n");
+        if (contentTypeAndBody != null) {
+            head.append("Content-Type: ").append(contentTypeAndBody.getKey()).append("\r\n");
+        }
+        head.append("Content-Length: ").append(body.length).append("\r\n\r\n");
+        try (Socket socket = new Socket("localhost", PORT)) {
+            socket.setSoTimeout(10_000);
+            OutputStream out = socket.getOutputStream();
+            out.write(head.toString().getBytes(StandardCharsets.US_ASCII));
+            out.write(body);
+            out.flush();
+            return new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII))
+                    .readLine();
+        }
     }
 }

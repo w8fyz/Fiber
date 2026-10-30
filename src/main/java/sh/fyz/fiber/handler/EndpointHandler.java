@@ -152,7 +152,7 @@ public class EndpointHandler {
             AuditLogProcessor.logAuditEvent(req, resp, auditLog, method, invocation.args(), invocation.result(),
                     pathVariables(req.getRequestURI()));
         }
-        if (rateLimit != null && resp.getStatus() == HttpServletResponse.SC_OK) {
+        if (rateLimit != null && rateLimit.resetOnSuccess() && resp.getStatus() == HttpServletResponse.SC_OK) {
             RateLimitProcessor.reset(rateLimit, method, invocation.args(), req);
         }
         return invocation.result();
