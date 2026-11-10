@@ -3,6 +3,7 @@ package sh.fyz.fiber;
 import org.junit.jupiter.api.*;
 import sh.fyz.fiber.core.security.logging.AuditLog;
 import sh.fyz.fiber.test.TestController;
+import sh.fyz.fiber.util.HttpUtil;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -100,6 +102,23 @@ public class AuditLogTest extends IntegrationTestBase {
         assertNotNull(log);
         assertTrue(log.getTimestamp() >= before, "Timestamp should be around request time");
         assertNotNull(log.getIp(), "IP should be captured");
+    }
+
+    @Test
+    @Order(100)
+    void testAuditLogRecordsTheClientBehindATrustedProxy() throws Exception {
+        Set<String> previous = HttpUtil.getTrustedProxies();
+        HttpUtil.setTrustedProxies(Set.of("127.0.0.1", "0:0:0:0:0:0:0:1", "[0:0:0:0:0:0:0:1]"));
+        try {
+            auditLogService.clear();
+            HttpResponse<String> resp = get("/test/audited-no-custom", Map.of("X-Real-IP", "203.0.113.7"));
+            assertEquals(200, resp.statusCode());
+
+            await().atMost(Duration.ofSeconds(2)).until(() -> auditLogService.getLastLog() != null);
+            assertEquals("203.0.113.7", auditLogService.getLastLog().getIp());
+        } finally {
+            HttpUtil.setTrustedProxies(previous);
+        }
     }
 
     @Test

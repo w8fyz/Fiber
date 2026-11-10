@@ -8,6 +8,7 @@ import sh.fyz.fiber.FiberServer;
 import sh.fyz.fiber.core.request.RequestAttributes;
 import sh.fyz.fiber.core.security.annotations.AuditLog;
 import sh.fyz.fiber.core.upload.UploadedFile;
+import sh.fyz.fiber.util.HttpUtil;
 import sh.fyz.fiber.util.JsonUtil;
 import sh.fyz.fiber.core.log.FiberLogger;
 import sh.fyz.fiber.core.log.FiberLog;
@@ -71,7 +72,7 @@ public class AuditLogProcessor {
                 ? new LinkedHashMap<>() : new LinkedHashMap<>(pathVariables);
         long timestamp = System.currentTimeMillis();
         long durationMs = elapsedMillis(req);
-        String ip = req.getRemoteAddr();
+        String ip = HttpUtil.getClientIpAddress(req);
         String userAgent = req.getHeader("User-Agent");
         String httpMethod = req.getMethod();
         String uri = req.getRequestURI();
